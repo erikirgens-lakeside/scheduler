@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RSchool Tech Request → Outlook</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+  :root{
+    --bg:#EDF0F1; --surface:#FFF; --ink:#1A2B33; --ink-soft:#51646E;
+    --line:#D5DCDF; --accent:#0E7C86; --accent-dark:#0A5A62; --stamp:#B3421B;
+    --ok-bg:#E4F2EE; --ok-ink:#19614B;
+    --warn-bg:#FCF3E3; --warn-ink:#8A5A0C; --warn-line:#E8C87E;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{background:var(--bg);color:var(--ink);font-family:'Barlow',system-ui,sans-serif;font-size:15px;line-height:1.45}
+  .wrap{max-width:1160px;margin:0 auto;padding:28px 20px 64px}
+  header.top{display:flex;align-items:baseline;justify-content:space-between;gap:16px;flex-wrap:wrap;border-bottom:2px solid var(--ink);padding-bottom:14px;margin-bottom:16px}
+  .tabs{display:flex;gap:6px;margin-bottom:20px}
+  .tab{border:1px solid var(--line);border-radius:6px 6px 0 0;background:none;padding:9px 18px;font:inherit;font-weight:600;color:var(--ink-soft);cursor:pointer;border-bottom:2px solid transparent}
+  .tab.active{background:var(--surface);color:var(--ink);border-bottom:2px solid var(--accent)}
+  .tab:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  h1{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:26px}
+  .top .sub{font-family:var(--mono);font-size:12px;color:var(--ink-soft)}
+  .grid{display:grid;grid-template-columns:minmax(320px,5fr) minmax(360px,6fr);gap:22px}
+  @media (max-width:860px){.grid{grid-template-columns:1fr}}
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:18px}
+  .panel h2{font-family:'Barlow Semi Condensed',sans-serif;font-size:15px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--ink-soft);margin-bottom:12px}
+  textarea{width:100%;border:1px solid var(--line);border-radius:6px;padding:10px;font-family:var(--mono);font-size:12px;color:var(--ink);background:#FBFCFC;resize:vertical}
+  #raw{min-height:200px}
+  textarea:focus,input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .field{margin-top:14px}
+  .field label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:4px}
+  .field input[type=text]{width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit}
+  .hint{font-size:12px;color:var(--ink-soft);margin-top:4px}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:none;border-radius:6px;padding:10px 18px;font:inherit;font-weight:600;cursor:pointer}
+  .btn.primary{background:var(--accent);color:#fff}
+  .btn.primary:hover{background:var(--accent-dark)}
+  .btn.ghost{background:none;border:1px solid var(--line);color:var(--ink-soft);padding:5px 10px;font-size:12.5px}
+  .btn.big{width:100%;justify-content:center;font-size:16px;padding:13px;margin-top:4px}
+  .btn:disabled{background:var(--line);color:var(--ink-soft);cursor:not-allowed}
+  .btn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .actions{margin-top:14px;display:flex;gap:10px;flex-wrap:wrap}
+  .empty{border:1.5px dashed var(--line);border-radius:8px;padding:34px 20px;text-align:center;color:var(--ink-soft);font-size:14px;margin-bottom:12px}
+  .banner{border-radius:6px;padding:10px 12px;font-size:13.5px;font-weight:600;margin-bottom:12px}
+  .banner.ok{background:var(--ok-bg);color:var(--ok-ink);display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px}
+  .banner.warn{background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line)}
+  .banner.err{background:#FBEFE9;color:#8C3415}
+  /* rules editor */
+  .rulerow{display:grid;grid-template-columns:1fr 1.4fr auto;gap:6px;margin-top:6px}
+  .rulerow input{border:1px solid var(--line);border-radius:5px;padding:6px 8px;font-size:12.5px;font-family:inherit;width:100%}
+  .rulehead{display:grid;grid-template-columns:1fr 1.4fr auto;gap:6px;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--ink-soft);margin-top:10px}
+  /* cards */
+  .card{position:relative;background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden;display:flex}
+  .card .spine{width:34px;flex:none;background:repeating-linear-gradient(180deg,var(--accent) 0 6px,transparent 6px 12px)}
+  .card.off{opacity:.55}
+  .card.off .spine{background:repeating-linear-gradient(180deg,var(--line) 0 6px,transparent 6px 12px)}
+  .card .body{flex:1;padding:12px 14px}
+  .row1{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .date{font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:19px}
+  .inc{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--ink-soft)}
+  input[type=checkbox]{accent-color:var(--accent)}
+  .flags{margin-top:6px;display:flex;gap:6px;flex-wrap:wrap}
+  .flag{font-family:var(--mono);font-size:10.5px;letter-spacing:.4px;border-radius:3px;padding:2px 7px;background:var(--warn-bg);color:var(--warn-ink);border:1px solid var(--warn-line)}
+  .flag.info{background:#E8F0F1;color:var(--accent-dark);border-color:#BFD8DA}
+  .meta{margin-top:8px;display:grid;grid-template-columns:auto 1fr;gap:2px 10px;font-size:13px}
+  .meta dt{color:var(--ink-soft);font-weight:600}
+  .setupbox{margin-top:10px;background:#F4F7F8;border:1px solid var(--line);border-radius:6px;padding:8px 10px}
+  .setupbox .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--accent-dark);margin-bottom:5px}
+  .timeedit{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:13px}
+  input[type=date],input[type=time]{border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+  .items{margin-top:10px;font-size:13px}
+  .items .lbl{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--ink-soft);margin-bottom:4px}
+  .items label{display:flex;gap:7px;align-items:flex-start;padding:2px 0;cursor:pointer}
+  .items label.dropped{color:var(--ink-soft);text-decoration:line-through;text-decoration-color:#B7C3C8}
+  .noteslab{display:flex;align-items:center;gap:7px;margin-top:10px;font-size:12.5px;font-weight:600;color:var(--ink-soft)}
+  .card textarea{min-height:56px;margin-top:5px;font-size:12px}
+  .wholist{margin-top:6px;font-family:var(--mono);font-size:11px;color:var(--ink-soft)}
+  .note{font-size:12.5px;color:var(--ink-soft);margin-top:12px;line-height:1.5}
+  /* draft preview — mimics an Outlook event window */
+  .draft{background:var(--surface);border:1px solid var(--line);border-radius:8px;margin-bottom:12px;overflow:hidden;box-shadow:0 1px 3px rgba(26,43,51,.08)}
+  .draft .dhead{background:var(--ink);color:#fff;padding:9px 14px;font-family:'Barlow Semi Condensed',sans-serif;font-weight:700;font-size:15px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}
+  .draft .dhead .dtag{font-family:var(--mono);font-weight:400;font-size:10.5px;opacity:.75;align-self:center}
+  .draft .dfields{padding:10px 14px;display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-size:13px;border-bottom:1px solid var(--line)}
+  .draft .dfields dt{color:var(--ink-soft);font-weight:600;text-align:right}
+  .draft .dbody{padding:12px 14px;font-size:13px;white-space:pre-wrap;font-family:inherit;line-height:1.5;color:var(--ink)}
+  .draft .dres{color:var(--accent-dark)}
+  .rawics{margin-top:4px}
+  .rawics summary{cursor:pointer;font-size:12.5px;font-weight:600;color:var(--accent-dark);padding:4px 0}
+  .rawics pre{background:#22333B;color:#D8E3E7;border-radius:6px;padding:12px;font-family:var(--mono);font-size:11px;overflow-x:auto;max-height:300px;white-space:pre-wrap;word-break:break-all}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Lakeside Tech Scheduler</h1>
+    <span class="sub">RSchool requests · team meetings · export .ics</span>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" id="tabBtn-rschool" role="tab" aria-selected="true">RSchool Requests</button>
+    <button class="tab" id="tabBtn-meetings" role="tab" aria-selected="false">Team Meetings</button>
+  </nav>
+
+  <div id="tab-rschool">
+  <div class="grid">
+    <!-- LEFT -->
+    <section class="panel">
+      <h2>1 · Paste the RSchool notification</h2>
+      <textarea id="raw" placeholder="Paste the full plain-text email here, starting from “Event:” …" spellcheck="false"></textarea>
+      <div class="actions"><button class="btn primary" id="parseBtn">Parse email</button></div>
+      <div class="banner err" id="parseError" style="display:none"></div>
+
+      <div style="margin-top:22px">
+        <h2>2 · Team defaults</h2>
+        <div class="field">
+          <label for="alwaysIn">Invite on every event</label>
+          <input type="text" id="alwaysIn" value="tyler.isham@lakesideschool.org, domonique.jordan@lakesideschool.org, techintern@lakesideschool.org">
+        </div>
+        <div class="rulehead"><span>If location contains…</span><span>Also invite</span><span></span></div>
+        <div id="rules"></div>
+        <div class="actions"><button class="btn ghost" id="addRule">+ Add location rule</button></div>
+        <p class="hint">Matching is case-insensitive against the room/building text. Defaults and rules are saved automatically for next time.</p>
+
+        <div class="field" style="margin-top:18px">
+          <label for="roomsIn">Outlook room list — one per line: <span style="font-family:var(--mono)">Room name | roomemail@lakesideschool.org</span> (email optional)</label>
+          <textarea id="roomsIn" style="min-height:90px" spellcheck="false" placeholder="TJ Vassar Center 140 | vassar140@lakesideschool.org&#10;TJ Vassar Center 142 | vassar142@lakesideschool.org&#10;WCC Auditorium"></textarea>
+          <div class="hint">Paste this once and it’s saved. You can also paste the raw JSON response from Graph Explorer’s room query — it converts automatically. Events use the matched name in the Location field and attach the room mailbox as a resource. If you edit this list, hit Parse again to re-match.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- RIGHT -->
+    <section class="panel">
+      <h2>3 · Review setup events &amp; export</h2>
+      <div id="results"><div class="empty">Parsed tech requests appear here.<br>Non-tech items (coffee, chairs, tables…) are stripped automatically — anything crossed out stays out of the calendar entry.</div></div>
+      <button class="btn ghost big" id="pvBtn" disabled style="margin-bottom:8px">Preview drafts — see exactly what Outlook will show</button>
+      <div id="preview" style="display:none"></div>
+      <button class="btn primary big" id="dlBtn" disabled>Download .ics for the Technology Calendar</button>
+      <p class="note" id="importNote" style="display:none"><strong>Import:</strong> Outlook on the web → Calendar → Add calendar → Upload from file → choose the Technology Calendar. Importing adds invitees to the event but doesn’t email them an invitation — open the event and hit send if they need one.</p>
+    </section>
+  </div>
+  </div><!-- /tab-rschool -->
+
+  <div id="tab-meetings" style="display:none">
+  <div class="grid">
+    <section class="panel">
+      <h2>1 · Meeting series settings</h2>
+      <div class="field">
+        <label for="mtTitle">Meeting title</label>
+        <input type="text" id="mtTitle" value="Tech Team Meeting">
+      </div>
+      <div class="field" style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:130px"><label for="mtFrom">From</label><input type="date" id="mtFrom" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono)"></div>
+        <div style="flex:1;min-width:130px"><label for="mtTo">Through</label><input type="date" id="mtTo" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono)"></div>
+      </div>
+      <div class="field" style="display:flex;gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:110px"><label for="mtStart">Start time</label><input type="time" id="mtStart" value="10:00" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono)"></div>
+        <div style="flex:1;min-width:110px"><label for="mtEnd">End time</label><input type="time" id="mtEnd" value="11:00" style="width:100%;border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-family:var(--mono)"></div>
+      </div>
+      <div class="field">
+        <label for="mtTeam">Tech team attendees (paste fresh each time — intentionally not saved)</label>
+        <textarea id="mtTeam" style="min-height:70px" placeholder="tyler.isham@lakesideschool.org, domonique.jordan@lakesideschool.org, …"></textarea>
+      </div>
+      <div class="checkrow" style="align-items:flex-start"><input type="radio" name="mtMode" id="mtModeSeries" checked>
+        <span><strong>Two recurring series</strong> — recommended. Weekly series in Bliss + monthly first-Wednesday series in MS Large Conf. After import, open each series and click <em>Send</em> once (2 clicks) — Exchange books every room occurrence and auto-declines conflicts.</span></div>
+      <div class="checkrow" style="align-items:flex-start"><input type="radio" name="mtMode" id="mtModeIndiv">
+        <span><strong>Individual events</strong> — one entry per Wednesday. Simplest import, but booking rooms means opening + sending each event separately.</span></div>
+      <div class="actions"><button class="btn primary" id="mtGenBtn">Generate Wednesdays</button></div>
+      <p class="hint" style="margin-top:10px">Rooms are fixed by rule: <strong>Bliss Conference Room</strong> every Wednesday, except the <strong>first Wednesday of each month</strong> → <strong>MS Large Conference Room</strong>. Federal holidays are auto-skipped; likely school-break weeks are flagged for you to confirm.</p>
+    </section>
+
+    <section class="panel">
+      <h2>2 · Review dates &amp; export</h2>
+      <div id="mtResults"><div class="empty">Pick a date range and generate.<br>Every Wednesday appears here with its room; uncheck any that fall on school holidays.</div></div>
+      <button class="btn ghost big" id="mtPvBtn" disabled style="margin-bottom:8px">Preview — what gets created &amp; who gets emailed</button>
+      <div id="mtPreview" style="display:none"></div>
+      <button class="btn primary big" id="mtDlBtn" disabled>Download .ics</button>
+      <p class="note" id="mtNote" style="display:none"><strong>To book the rooms:</strong> import this file into the calendar the meetings should live on, then open the series (or each event) and click <strong>Send</strong>. The room mailboxes accept or decline automatically — a decline email means that slot is already taken.</p>
+    </section>
+  </div>
+  </div><!-- /tab-meetings -->
+</div>
+
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+let parsed=null;
+
+/* ---------------- classification ---------------- */
+const NONTECH=/beverage|coffee|tea\b|chair|tablecloth|linen|table[s]?\s*-|divider|food|cater|lunch|snack|dessert|water\b|napkin|plate|utensil|trash|custod|garbage|podium\s*-\s*wood|parking|sign(age)?\b/i;
+const TECH=/micro|mic\b|display|projector|screen|zoom|tech|a\/v|\bav\b|audio|sound|speaker|laptop|comput|camera|stream|record|hdmi|cable|support/i;
+const isTech=s=>!NONTECH.test(s)&&TECH.test(s);
+const BUSINESS_END=15*60+30; // 3:30 PM
+const SETUP_MIN=30;
+const AFTERHOURS_SETUP=14*60+30; // 2:30 PM default
+const FRIDAY_SETUP=15*60;        // 3:00 PM (weekend rule)
+
+/* ---------------- settings ---------------- */
+const DEFAULT_RULES=[{match:'Middle School',emails:'dave.miller@lakesideschool.org'}];
+function renderRules(rules){
+  $('rules').innerHTML=rules.map((r,i)=>`<div class="rulerow">
+    <input type="text" data-r="${i}" data-k="match" value="${r.match.replace(/"/g,'&quot;')}" placeholder="e.g. WCC">
+    <input type="text" data-r="${i}" data-k="emails" value="${r.emails.replace(/"/g,'&quot;')}" placeholder="email, email">
+    <button class="btn ghost" data-del="${i}" title="Remove rule">✕</button></div>`).join('');
+  $('rules').querySelectorAll('input').forEach(inp=>inp.addEventListener('change',()=>{ 
+    const rs=readRules();saveSettings(rs);
+  }));
+  $('rules').querySelectorAll('[data-del]').forEach(b=>b.addEventListener('click',()=>{
+    const rs=readRules();rs.splice(+b.dataset.del,1);renderRules(rs);saveSettings(rs);
+  }));
+}
+function readRules(){
+  const rows=[...$('rules').querySelectorAll('.rulerow')];
+  return rows.map(r=>({match:r.querySelector('[data-k=match]').value.trim(),
+                       emails:r.querySelector('[data-k=emails]').value.trim()}))
+             .filter(r=>r.match&&r.emails);
+}
+$('addRule').addEventListener('click',()=>{const rs=readRules();rs.push({match:'',emails:''});renderRules(rs);});
+async function saveSettings(rules){
+  try{await window.storage.set('tech-request-settings',JSON.stringify({
+    always:$('alwaysIn').value,rules:rules||readRules(),rooms:$('roomsIn').value}));}catch(e){}
+}
+$('alwaysIn').addEventListener('change',()=>saveSettings());
+$('roomsIn').addEventListener('change',()=>{
+  // If Graph Explorer JSON was pasted, convert it to editable "name | email" lines
+  const rooms=parseRoomsText($('roomsIn').value);
+  if(rooms&&/^[\[{]/.test($('roomsIn').value.trim()))
+    $('roomsIn').value=rooms.map(r=>r.email?`${r.name} | ${r.email}`:r.name).join('\n');
+  saveSettings();
+});
+(async function(){
+  let rules=DEFAULT_RULES;
+  try{const r=await window.storage.get('tech-request-settings');
+    if(r&&r.value){const s=JSON.parse(r.value);
+      if(s.always)$('alwaysIn').value=s.always;
+      if(s.rooms)$('roomsIn').value=s.rooms;
+      if(Array.isArray(s.rules))rules=s.rules;}
+  }catch(e){}
+  if(!$('roomsIn').value.trim())$('roomsIn').value=DEFAULT_ROOMS;
+  renderRules(rules);
+})();
+
+/* ---------------- Outlook rooms ---------------- */
+const DEFAULT_ROOMS=`Vassar 140 | Vassar140@lakesideschool.org
+Vassar 142 | Vassar142@lakesideschool.org
+Vassar Seminar Room | VassarSeminarRoom@lakesideschool.org
+Student Center Meeting Room | StudentCenterMeetingRoom@lakesideschool.org
+Moore 3rd floor Sun Room | Moore3rdFloorSunRoom@lakesideschool.org
+Moore 3rd floor Conference Room | Moore3rdFloorConference@lakesideschool.org
+Moore 3rd floor Moon Room | Moore3rdFloorMoonRoom@lakesideschool.org
+Moore 31A | Moore31A@lakesideschool.org
+Schoolhouse Board Room | SchoolhouseBoardRoom@lakesideschool.org
+Schoolhouse Conference Room | SchoolhouseConferenceRoom@lakesideschool.org
+Business Office Conference Room | BOConference@lakesideschool.org
+Bliss Conference Room | BlissConferenceRoom@lakesideschool.org
+Fix Conference Room | FixConferenceRoom@lakesideschool.org
+Counseling Center Rm 200b | ms200b@lakesideschool.org
+Testing Center | TestingCenter@lakesideschool.org
+Downtown School | downtownschool@lakesideschool.org
+Fireplace Room | FireplaceRoom@lakesideschool.org
+Refectory | Refectory@LakesideSchool.org
+McKay Chapel | Chapel@lakesideschool.org
+Quad | Quad@LakesideSchool.org
+Wright Community Center | WCC@LakesideSchool.org
+St. Nicholas Auditorium | St.NicholasAuditorium@LakesideSchool.org
+St. Nicholas Outdoor Room | St.NicholasOutdoorRoom@LakesideSchool.org
+AAC 206 Classroom | AAC206Classroom@lakesideschool.org
+AAC 207 Classroom | AAC207Classroom@lakesideschool.org
+AAC Lobby | AACLobby@lakesideschool.org
+Mat Room | MatRoom@lakesideschool.org
+Team Room | TeamRoom@lakesideschool.org
+US Library AV Room | USLibraryAVRoom@LakesideSchool.org
+US Gym | usgym@lakesideschool.org
+US Field House | USFieldHouse@lakesideschool.org
+US Chapel 2 | uschapel2@lakesideschool.org
+US Chapel 4 | USChapel4@lakesideschool.org
+US Chapel 5 | USChapel5@lakesideschool.org
+US Chapel 7 | USChapel7@lakesideschool.org
+US Chapel 9 | USChapel9@lakesideschool.org
+US Chapel 11 | USChapel11@lakesideschool.org
+Stimson-Carlisle Field | Stimson-CarlisleField@LakesideSchool.org
+Parsons Field | ParsonsField@LakesideSchool.org
+MS 108 Zoom Room | MS108ZoomRoom@lakesideschool.org
+MS Room 173A (Arts Multipurpose Room) | msroom173a@lakesideschool.org
+MS Room 180 (Practice Room) | MSRoom180@lakesideschool.org
+MS Room 183 (Practice Room) | MSRoom183@lakesideschool.org
+MS Room 184 (Practice Room) | MSRoom184@lakesideschool.org
+MS Room 185 (Music Room) | MSRoom185@lakesideschool.org
+Room 112 | MS112Classroom@lakesideschool.org
+MS Makerspace | MSMakerspace@lakesideschool.org
+MS Terrace | MSTerrace@lakesideschool.org
+MS Spline | MSSpline@lakesideschool.org
+MS Gym | MSGym@lakesideschool.org
+MS Field | MSField@lakesideschool.org
+MS Dining Room East | MSDiningRoomEast@lakesideschool.org
+MS Dining Room West | MSDiningRoomWest@lakesideschool.org
+MS Evans Theater | MSEvansTheater@lakesideschool.org
+MS Large Conference Room | MSLargeConferenceRoom@lakesideschool.org`;
+
+function parseRoomsText(txt){
+  txt=txt.trim();
+  if(!txt)return null;
+  if(/^[\[{]/.test(txt)){ // Graph Explorer JSON paste
+    try{
+      const j=JSON.parse(txt);
+      const arr=Array.isArray(j)?j:(j.value||[]);
+      const rooms=arr.map(r=>({name:r.displayName||r.name||'',email:r.emailAddress||r.email||''})).filter(r=>r.name);
+      if(rooms.length)return rooms;
+    }catch(e){/* not JSON — fall through to line format */}
+  }
+  return txt.split(/\n/).map(l=>l.trim()).filter(Boolean).map(l=>{
+    const parts=l.split('|').map(s=>(s||'').trim());
+    return{name:parts[0],email:parts[1]&&/@/.test(parts[1])?parts[1]:''};
+  }).filter(r=>r.name);
+}
+function roomList(){return parseRoomsText($('roomsIn').value)||[];}
+const GENERIC=new Set(['room','center','building','hall','school','the','and']);
+// short tokens (ms, us, wcc, aac) must match on word boundaries; longer ones can substring-match
+const hitTok=(hay,w)=>w.length<=3?new RegExp('(^|[^a-z0-9])'+w+'([^a-z0-9]|$)').test(hay):hay.includes(w);
+function expandAliases(label){
+  const extra=[];
+  if(/\bmiddle school\b/.test(label))extra.push('ms');
+  if(/\bupper school\b/.test(label))extra.push('us');
+  if(/\bwright\b/.test(label))extra.push('wcc');
+  if(/\bwcc\b/.test(label))extra.push('wright','community');
+  if(/\bt\.?\s?j\.?\s?vassar\b/.test(label))extra.push('vassar');
+  if(/\bst\.?\s?nicholas\b/.test(label))extra.push('nicholas');
+  return extra;
+}
+function matchRooms(e){
+  const rooms=roomList();
+  const label=e.locs.join(' ').toLowerCase();
+  const aliases=expandAliases(label);
+  const labelX=label+' '+aliases.join(' '); // label plus alias tokens, for reverse checks
+  const nums=label.match(/\d{1,4}[a-z]?/g)||[];
+  const words=[...new Set([...(label.match(/[a-z]{3,}/g)||[]).filter(w=>!GENERIC.has(w)),...aliases])];
+  const out=[];
+  rooms.forEach((r,idx)=>{
+    // include the email local part as matchable text ("WCC@..." lets "wcc" hit Wright Community Center)
+    const rl=(r.name+' '+(r.email.split('@')[0]||'')).toLowerCase();
+    const rnums=rl.match(/\d{1,4}[a-z]?/g)||[];
+    const wordHits=words.filter(w=>hitTok(rl,w)).length;
+    // the room's own distinctive name tokens (e.g. Refectory → ["refectory"], Room 112 → [])
+    const rTokens=r.name.toLowerCase().split(/[^a-z0-9]+/).filter(t=>t.length>=2&&!GENERIC.has(t)&&!/^\d/.test(t));
+    if(rnums.length){ // numbered room: number must match, plus a word (unless the name is purely generic, like "Room 112")
+      if(nums.some(n=>rnums.includes(n))&&(wordHits>=1||rTokens.length===0))out.push(idx);
+    }else if(wordHits>=2){out.push(idx);}
+    else if(rTokens.length&&rTokens.every(t=>hitTok(labelX,t))){out.push(idx);} // every distinctive room word appears (handles "Refectory", "Quad")
+  });
+  return out;
+}
+
+/* ---------------- parsing ---------------- */
+const grab=(re,t)=>{const m=t.match(re);return m?m[1].trim():'';};
+const to24=t=>{const m=t.match(/(\d{1,2}):(\d{2})\s*([AP])M?/i);if(!m)return null;
+  let h=+m[1];if(m[3].toUpperCase()==='P'&&h!==12)h+=12;if(m[3].toUpperCase()==='A'&&h===12)h=0;
+  return h*60+ +m[2];};
+const pDate=d=>{const m=d.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?{y:+m[3],mo:+m[1],day:+m[2]}:null;};
+const jsDate=(d,mins)=>{const p=pDate(d);return new Date(p.y,p.mo-1,p.day,Math.floor(mins/60),mins%60);};
+const minsToLabel=m=>{let h=Math.floor(m/60),mm=m%60,ap=h>=12?'PM':'AM';h=h%12||12;
+  return `${h}:${String(mm).padStart(2,'0')} ${ap}`;};
+const dToICS=dt=>`${dt.getFullYear()}${String(dt.getMonth()+1).padStart(2,'0')}${String(dt.getDate()).padStart(2,'0')}T${String(dt.getHours()).padStart(2,'0')}${String(dt.getMinutes()).padStart(2,'0')}00`;
+const fmtDay=dt=>dt.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+const isoD=dt=>`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+const isoT=dt=>`${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+
+function parseEmail(text){
+  const header={event:grab(/Event:\s*(.+)/,text),permit:grab(/Permit:\s*(.+)/,text),usedBy:grab(/Used by:\s*(.+)/,text)};
+  const blocks=text.split(/\*{4,}/).map(b=>b.trim()).filter(b=>/Location:/i.test(b));
+  const raw=[];
+  for(const b of blocks){
+    const dt=b.match(/Date\s*&\s*Time:\s*([\d/]+)\s*-\s*(\d{1,2}:\d{2}\s*[AP]M)\s*to\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+    if(!dt)continue;
+    const st=b.match(/Setup\s*&\s*Teardown:\s*(\d{1,2}:\d{2}\s*[AP]M)\s*\/\s*(\d{1,2}:\d{2}\s*[AP]M)/i);
+    const nm=b.match(/Setup Notes:\s*([\s\S]*?)(?=\n\s*(?:Other Needs|Attendance:)|$)/i);
+    raw.push({loc:grab(/Location:\s*(.+)/,b),date:dt[1],start:to24(dt[2]),end:to24(dt[3]),
+      facSetup:st?st[1]:null,facTear:st?st[2]:null,
+      notes:nm?nm[1].replace(/\s+\n/g,'\n').trim():'',
+      needs:[...b.matchAll(/^-\s*\((\d+)\)\s*(.+)$/gm)].map(m=>`(${m[1]}) ${m[2].trim()}`),
+      attendance:grab(/Attendance:\s*(\d+)/,b)});
+  }
+  const map=new Map();
+  for(const r of raw){
+    const key=r.date+'|'+r.start+'|'+r.end;
+    if(!map.has(key))map.set(key,{...r,locs:[r.loc],include:true});
+    else{const e=map.get(key);
+      if(!e.locs.includes(r.loc))e.locs.push(r.loc);
+      if(r.needs.length&&!e.needs.length)e.needs=r.needs;
+      if(r.notes&&!e.notes)e.notes=r.notes;}
+  }
+  const events=[...map.values()];
+  for(const e of events){
+    const parts=e.locs.map(l=>{const m=l.match(/^(.*?)\s+(\S+)\s*-\s*(.+)$/);return m?{pre:m[1],num:m[2],bld:m[3]}:null;});
+    e.locLabel=(parts.every(p=>p)&&parts.length>1&&new Set(parts.map(p=>p.pre+'|'+p.bld)).size===1)
+      ?`${parts[0].pre} ${parts.map(p=>p.num).join('/')} – ${parts[0].bld}`:e.locs.join(' + ');
+    e.items=e.needs.map(n=>({text:n,keep:isTech(n)}));
+    e.hasTech=e.items.some(i=>i.keep);
+    e.include=e.hasTech;
+    e.notesInclude=!!e.notes;
+    e.isWebinar=/webinar/i.test(header.event+' '+e.notes);
+    e.roomSel=matchRooms(e);
+  }
+  events.sort((a,b)=>jsDate(a.date,a.start)-jsDate(b.date,b.start));
+  applyTiming(events);
+  return{header,events};
+}
+
+/* ---------------- timing engine ---------------- */
+function applyTiming(events){
+  for(const e of events){
+    e.flags=[];
+    const evStart=jsDate(e.date,e.start),dow=evStart.getDay();
+    if(dow===0||dow===6){ // weekend → Friday 3:00
+      const fri=new Date(evStart);fri.setDate(fri.getDate()-(dow===6?1:2));
+      e.setupStart=new Date(fri.getFullYear(),fri.getMonth(),fri.getDate(),Math.floor(FRIDAY_SETUP/60),FRIDAY_SETUP%60);
+      e.flags.push({t:'WEEKEND → FRI SETUP',warn:true});
+    }else if(e.start>BUSINESS_END){ // after hours
+      e.setupStart=jsDate(e.date,AFTERHOURS_SETUP);
+      e.flags.push({t:'AFTER HOURS',warn:false});
+      if(e.isWebinar)e.flags.push({t:'WEBINAR — CONFIRM TIMING',warn:true});
+    }else{
+      e.setupStart=jsDate(e.date,e.start-SETUP_MIN);
+    }
+    if(e.isWebinar&&!(e.start>BUSINESS_END))e.flags.push({t:'WEBINAR',warn:false});
+    e.setupEnd=new Date(e.setupStart.getTime()+SETUP_MIN*60000);
+    if(!e.hasTech)e.flags.push({t:'NO TECH ITEMS',warn:true});
+  }
+  // stagger same-day overlaps (in setup-date order)
+  const byDay={};
+  for(const e of events){(byDay[isoD(e.setupStart)]??=[]).push(e);}
+  for(const day of Object.values(byDay)){
+    day.sort((a,b)=>a.setupStart-b.setupStart);
+    for(let i=1;i<day.length;i++){
+      const prev=day[i-1],cur=day[i];
+      if(cur.setupStart<prev.setupEnd){
+        cur.setupStart=new Date(prev.setupEnd);
+        cur.setupEnd=new Date(cur.setupStart.getTime()+SETUP_MIN*60000);
+        cur.flags.push({t:'STAGGERED',warn:false});
+        const evStart=jsDate(cur.date,cur.start);
+        if(isoD(cur.setupStart)===isoD(evStart)&&cur.setupEnd>evStart)cur.flags.push({t:'CHECK OVERLAP',warn:true});
+      }
+    }
+  }
+}
+
+/* ---------------- render ---------------- */
+function attendeesFor(e){
+  const always=$('alwaysIn').value.split(',').map(s=>s.trim()).filter(s=>/@/.test(s));
+  const extra=[];
+  for(const r of readRules()){
+    if(e.locLabel.toLowerCase().includes(r.match.toLowerCase()))
+      extra.push(...r.emails.split(',').map(s=>s.trim()).filter(s=>/@/.test(s)));
+  }
+  return[...new Set([...always,...extra])];
+}
+function roomPickerHTML(e,i){
+  const rooms=roomList();
+  if(!rooms.length)return `<div class="items"><div class="lbl">Outlook location</div><span class="hint" style="font-size:12.5px">Using raw text — paste your Outlook room list in panel 2 to map to reservable rooms.</span></div>`;
+  const chips=e.roomSel.map(idx=>rooms[idx]?`<label><input type="checkbox" data-role="room" data-i="${i}" data-idx="${idx}" checked><span>${rooms[idx].name}${rooms[idx].email?' <span style="color:var(--accent-dark)">· resource</span>':''}</span></label>`:'').join('');
+  const options=rooms.map((r,idx)=>e.roomSel.includes(idx)?'':`<option value="${idx}">${r.name}</option>`).join('');
+  return `<div class="items"><div class="lbl">Outlook location — used in the calendar Location field</div>
+    ${chips||'<span class="hint" style="font-size:12.5px">No match found — add one below, or the raw RSchool text will be used.</span>'}
+    <select data-role="roomadd" data-i="${i}" style="margin-top:5px;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;font-family:inherit;color:var(--ink)">
+      <option value="">Add a room…</option>${options}</select>
+  </div>`;
+}
+function render(){
+  const box=$('results');
+  if(!parsed||!parsed.events.length){box.innerHTML='<div class="empty">Nothing parsed yet.</div>';$('dlBtn').disabled=true;$('importNote').style.display='none';return;}
+  const anyTech=parsed.events.some(e=>e.hasTech);
+  const n=parsed.events.filter(e=>e.include).length;
+  let html='';
+  if(!anyTech)html+=`<div class="banner warn">No tech items found in this email — it may be catering/maintenance only. You can still force-include dates below if needed.</div>`;
+  html+=`<div class="banner ok"><span>Title: <strong>[Tech Request] - ${parsed.header.event||'—'}</strong></span><span>${n} setup event${n!==1?'s':''} selected</span></div>`;
+  parsed.events.forEach((e,i)=>{
+    const evStart=jsDate(e.date,e.start);
+    html+=`<div class="card${e.include?'':' off'}">
+      <div class="spine"></div><div class="body">
+      <div class="row1"><span class="date">${fmtDay(evStart)}</span>
+        <label class="inc"><input type="checkbox" data-role="inc" data-i="${i}" ${e.include?'checked':''}>Include</label></div>
+      ${e.flags.length?`<div class="flags">${e.flags.map(f=>`<span class="flag${f.warn?'':' info'}">${f.t}</span>`).join('')}</div>`:''}
+      <dl class="meta">
+        <dt>Actual event</dt><dd>${minsToLabel(e.start)}–${minsToLabel(e.end)}</dd>
+        <dt>Room (RSchool)</dt><dd>${e.locLabel}</dd>
+        <dt>Attendance</dt><dd>${e.attendance||'—'}</dd>
+      </dl>
+      ${roomPickerHTML(e,i)}
+      <div class="setupbox"><div class="lbl">Tech setup block (goes on the calendar)</div>
+        <div class="timeedit">
+          <input type="date" data-role="sdate" data-i="${i}" value="${isoD(e.setupStart)}" aria-label="Setup date">
+          <input type="time" data-role="sstart" data-i="${i}" value="${isoT(e.setupStart)}" aria-label="Setup start">–
+          <input type="time" data-role="send" data-i="${i}" value="${isoT(e.setupEnd)}" aria-label="Setup end">
+        </div>
+        <div class="wholist">Inviting: ${attendeesFor(e).join(', ')||'—'}</div>
+      </div>
+      <div class="items"><div class="lbl">Items — checked = goes in the event notes</div>
+        ${e.items.map((it,j)=>`<label class="${it.keep?'':'dropped'}"><input type="checkbox" data-role="item" data-i="${i}" data-j="${j}" ${it.keep?'checked':''}><span>${it.text}</span></label>`).join('')||'<span style="color:var(--ink-soft)">No itemized needs listed for this date.</span>'}
+      </div>
+      ${e.notes?`<label class="noteslab"><input type="checkbox" data-role="notesinc" data-i="${i}" ${e.notesInclude?'checked':''}>Include setup notes (edit to keep only what tech needs to know)</label>
+      <textarea data-role="notes" data-i="${i}" ${e.notesInclude?'':'disabled'}>${e.notes}</textarea>`:''}
+      </div></div>`;
+  });
+  box.innerHTML=html;
+  $('dlBtn').disabled=n===0;
+  $('pvBtn').disabled=n===0;
+  $('preview').style.display='none';$('pvBtn').textContent='Preview drafts — see exactly what Outlook will show';
+  $('importNote').style.display='block';
+  box.querySelectorAll('input,textarea,select').forEach(inp=>inp.addEventListener('change',ev=>{
+    const t=ev.target,i=+t.dataset.i,e=parsed.events[i];
+    switch(t.dataset.role){
+      case'inc':e.include=t.checked;render();break;
+      case'item':e.items[+t.dataset.j].keep=t.checked;render();break;
+      case'notesinc':e.notesInclude=t.checked;render();break;
+      case'notes':e.notes=t.value;break;
+      case'room':{const idx=+t.dataset.idx;
+        e.roomSel=t.checked?[...new Set([...e.roomSel,idx])]:e.roomSel.filter(x=>x!==idx);render();break;}
+      case'roomadd':{if(t.value!==''){e.roomSel=[...new Set([...e.roomSel,+t.value])];render();}break;}
+      case'sdate':{const[_,y,mo,d]=t.value.match(/(\d+)-(\d+)-(\d+)/)||[];if(y){
+        e.setupStart=new Date(+y,+mo-1,+d,e.setupStart.getHours(),e.setupStart.getMinutes());
+        e.setupEnd=new Date(+y,+mo-1,+d,e.setupEnd.getHours(),e.setupEnd.getMinutes());}break;}
+      case'sstart':{const[h,m]=t.value.split(':');e.setupStart.setHours(+h,+m);break;}
+      case'send':{const[h,m]=t.value.split(':');e.setupEnd.setHours(+h,+m);break;}
+    }
+  }));
+}
+
+/* ---------------- ICS ---------------- */
+const esc=s=>String(s).replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\r?\n/g,'\\n');
+const fold=l=>{let o='';while(l.length>73){o+=l.slice(0,73)+'\r\n ';l=l.slice(73);}return o+l;};
+function buildICS(){
+  const title=`[Tech Request] - ${parsed.header.event||'Event'}`;
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z/,'Z');
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TechRequestScheduler//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  for(const e of parsed.events){
+    if(!e.include)continue;
+    const c=composeEvent(e,title);
+    const uid=`${(parsed.header.permit||'evt').replace(/\W/g,'')}-${dToICS(e.setupStart)}-${Math.random().toString(36).slice(2,8)}@tech-request`;
+    lines.push('BEGIN:VEVENT',fold('UID:'+uid),'DTSTAMP:'+stamp,
+      'DTSTART:'+dToICS(e.setupStart),'DTEND:'+dToICS(e.setupEnd),
+      fold('SUMMARY:'+esc(c.title)),fold('LOCATION:'+esc(c.locStr)),
+      fold('DESCRIPTION:'+esc(c.desc)));
+    for(const a of c.attendees)lines.push(fold(`ATTENDEE;ROLE=REQ-PARTICIPANT;CN=${esc(a)}:mailto:${a}`));
+    for(const r of c.resources)lines.push(fold(`ATTENDEE;CUTYPE=RESOURCE;ROLE=NON-PARTICIPANT;CN=${esc(r.name)}:mailto:${r.email}`));
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+// Compose the final event fields — single source of truth for both the .ics and the draft preview
+function composeEvent(e,title){
+  const rooms=roomList();
+  const selRooms=e.roomSel.map(idx=>rooms[idx]).filter(Boolean);
+  const locStr=selRooms.length?selRooms.map(r=>r.name).join('; '):e.locLabel;
+  const evStart=jsDate(e.date,e.start);
+  const desc=[];
+  desc.push(`ACTUAL EVENT: ${fmtDay(evStart)}, ${minsToLabel(e.start)}–${minsToLabel(e.end)}`);
+  desc.push(`Location: ${locStr}${selRooms.length&&locStr!==e.locLabel?` (RSchool: ${e.locLabel})`:''}`);
+  desc.push(`Permit ${parsed.header.permit||'—'} · Requested by: ${parsed.header.usedBy||'—'}`);
+  if(e.attendance)desc.push(`Expected attendance: ${e.attendance}`);
+  const kept=e.items.filter(i=>i.keep);
+  if(kept.length)desc.push('\nTech needed:\n'+kept.map(i=>'• '+i.text).join('\n'));
+  if(e.notesInclude&&e.notes.trim())desc.push('\nSetup notes:\n'+e.notes.trim());
+  return{title:title||`[Tech Request] - ${parsed.header.event||'Event'}`,
+    locStr,attendees:attendeesFor(e),resources:selRooms.filter(r=>r.email),desc:desc.join('\n')};
+}
+
+/* ================= TEAM MEETINGS TAB ================= */
+const MT_ROOMS={
+  bliss:{name:'Bliss Conference Room',email:'BlissConferenceRoom@lakesideschool.org'},
+  msLarge:{name:'MS Large Conference Room',email:'MSLargeConferenceRoom@lakesideschool.org'}
+};
+let mtOcc=[]; // generated occurrences
+
+// tab switching
+function showTab(which){
+  $('tab-rschool').style.display=which==='rschool'?'':'none';
+  $('tab-meetings').style.display=which==='meetings'?'':'none';
+  $('tabBtn-rschool').classList.toggle('active',which==='rschool');
+  $('tabBtn-meetings').classList.toggle('active',which==='meetings');
+  $('tabBtn-rschool').setAttribute('aria-selected',which==='rschool');
+  $('tabBtn-meetings').setAttribute('aria-selected',which==='meetings');
+}
+$('tabBtn-rschool').addEventListener('click',()=>showTab('rschool'));
+$('tabBtn-meetings').addEventListener('click',()=>showTab('meetings'));
+
+// --- US federal holidays (auto-skip) + likely school breaks (flag only) ---
+function nthDow(y,m,dow,n){const d=new Date(y,m,1);const off=(dow-d.getDay()+7)%7;return new Date(y,m,1+off+(n-1)*7);}
+function lastDow(y,m,dow){const d=new Date(y,m+1,0);const off=(d.getDay()-dow+7)%7;return new Date(y,m+1,0-off);}
+function fedHoliday(dt){
+  const y=dt.getFullYear(),m=dt.getMonth(),d=dt.getDate(),t=dt.getTime();
+  const same=(x)=>x.getTime()===new Date(y,m,d).getTime();
+  if(m===0&&d===1)return "New Year's Day";
+  if(same(nthDow(y,0,1,3)))return 'MLK Day';
+  if(same(nthDow(y,1,1,3)))return 'Presidents Day';
+  if(same(lastDow(y,4,1)))return 'Memorial Day';
+  if(m===5&&d===19)return 'Juneteenth';
+  if(m===6&&d===4)return 'Independence Day';
+  if(same(nthDow(y,8,1,1)))return 'Labor Day';
+  if(same(nthDow(y,9,1,2)))return 'Indigenous Peoples Day';
+  if(m===10&&d===11)return 'Veterans Day';
+  if(same(nthDow(y,10,4,4)))return 'Thanksgiving';
+  if(m===11&&d===25)return 'Christmas Day';
+  return null;
+}
+function likelyBreak(dt){
+  const y=dt.getFullYear(),m=dt.getMonth(),d=dt.getDate();
+  const tg=nthDow(y,10,4,4); // Thanksgiving Thursday
+  if(m===10&&d===tg.getDate()-1)return 'Day before Thanksgiving';
+  if((m===11&&d>=21)||(m===0&&d<=4))return 'Winter break window';
+  const tgW=new Date(y,1,0);// not used
+  return null;
+}
+const isFirstWed=dt=>dt.getDay()===3&&dt.getDate()<=7;
+
+function mtGenerate(){
+  const from=$('mtFrom').value,to=$('mtTo').value;
+  mtOcc=[];
+  if(!from||!to){renderMt();return;}
+  const [fy,fm,fd]=from.split('-').map(Number),[ty,tm,td]=to.split('-').map(Number);
+  let cur=new Date(fy,fm-1,fd);const end=new Date(ty,tm-1,td);
+  // advance to first Wednesday
+  cur.setDate(cur.getDate()+((3-cur.getDay()+7)%7));
+  while(cur<=end){
+    const hol=fedHoliday(cur),brk=likelyBreak(cur);
+    mtOcc.push({date:new Date(cur),first:isFirstWed(cur),
+      room:isFirstWed(cur)?MT_ROOMS.msLarge:MT_ROOMS.bliss,
+      holiday:hol,breakHint:hol?null:brk,
+      include:!hol});
+    cur.setDate(cur.getDate()+7);
+  }
+  renderMt();
+}
+$('mtGenBtn').addEventListener('click',mtGenerate);
+
+function renderMt(){
+  const box=$('mtResults');
+  if(!mtOcc.length){box.innerHTML='<div class="empty">No Wednesdays in that range — check the dates.</div>';$('mtDlBtn').disabled=true;$('mtNote').style.display='none';return;}
+  const n=mtOcc.filter(o=>o.include).length;
+  let html=`<div class="banner ok"><span>${mtOcc.length} Wednesday${mtOcc.length!==1?'s':''} in range</span><span>${n} selected</span></div>`;
+  mtOcc.forEach((o,i)=>{
+    html+=`<div class="card${o.include?'':' off'}"><div class="spine"></div><div class="body">
+      <div class="row1"><span class="date">${fmtDay(o.date)}</span>
+        <label class="inc"><input type="checkbox" data-mt="${i}" ${o.include?'checked':''}>Include</label></div>
+      <div class="flags">
+        <span class="flag info">${o.first?'FIRST WED → MS LARGE CONF':'BLISS CONF'}</span>
+        ${o.holiday?`<span class="flag">HOLIDAY: ${o.holiday.toUpperCase()}</span>`:''}
+        ${o.breakHint?`<span class="flag">CHECK: ${o.breakHint.toUpperCase()}</span>`:''}
+      </div>
+    </div></div>`;
+  });
+  box.innerHTML=html;
+  $('mtDlBtn').disabled=n===0;
+  $('mtPvBtn').disabled=n===0;
+  $('mtPreview').style.display='none';$('mtPvBtn').textContent='Preview — what gets created & who gets emailed';
+  $('mtNote').style.display='block';
+  box.querySelectorAll('input[data-mt]').forEach(inp=>inp.addEventListener('change',ev=>{
+    mtOcc[+ev.target.dataset.mt].include=ev.target.checked;renderMt();
+  }));
+}
+
+function mtBuildICS(){
+  const title=$('mtTitle').value.trim()||'Tech Team Meeting';
+  const team=$('mtTeam').value.split(/[,;\n]/).map(s=>s.trim()).filter(s=>/@/.test(s));
+  const [sh,sm]=$('mtStart').value.split(':').map(Number);
+  const [eh,em]=$('mtEnd').value.split(':').map(Number);
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z/,'Z');
+  const dt=(d,h,m)=>`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}T${String(h).padStart(2,'0')}${String(m).padStart(2,'0')}00`;
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TechRequestScheduler//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  const push=(o,extra)=>{
+    lines.push('BEGIN:VEVENT',
+      fold(`UID:techteam-${dt(o.date,sh,sm)}-${Math.random().toString(36).slice(2,8)}@tech-request`),
+      'DTSTAMP:'+stamp,'DTSTART:'+dt(o.date,sh,sm),'DTEND:'+dt(o.date,eh,em),
+      fold('SUMMARY:'+esc(title)),fold('LOCATION:'+esc(o.room.name)),
+      fold('DESCRIPTION:'+esc(`Weekly tech team meeting.\nRoom: ${o.room.name}`)));
+    if(extra)lines.push(...extra);
+    for(const a of team)lines.push(fold(`ATTENDEE;ROLE=REQ-PARTICIPANT;CN=${esc(a)}:mailto:${a}`));
+    lines.push(fold(`ATTENDEE;CUTYPE=RESOURCE;ROLE=NON-PARTICIPANT;CN=${esc(o.room.name)}:mailto:${o.room.email}`));
+    lines.push('END:VEVENT');
+  };
+  if($('mtModeIndiv').checked){
+    for(const o of mtOcc)if(o.include)push(o);
+  }else{
+    // two recurring series: weekly (Bliss, non-first Wednesdays) + monthly 1st Wednesday (MS Large)
+    const untilAll=mtOcc[mtOcc.length-1].date;
+    const until=`${untilAll.getFullYear()}${String(untilAll.getMonth()+1).padStart(2,'0')}${String(untilAll.getDate()).padStart(2,'0')}T235959`;
+    for(const first of[false,true]){
+      const set=mtOcc.filter(o=>o.first===first);
+      const included=set.filter(o=>o.include);
+      if(!included.length)continue;
+      const anchor=included[0]; // DTSTART must be a real occurrence
+      // EXDATEs: pattern dates that are skipped — excluded occurrences after anchor, plus pattern hits before anchor
+      const ex=set.filter(o=>!o.include&&o.date>anchor.date).map(o=>dt(o.date,sh,sm))
+        .concat(set.filter(o=>o.date<anchor.date).map(o=>dt(o.date,sh,sm)));
+      const rrule=first?`RRULE:FREQ=MONTHLY;BYDAY=1WE;UNTIL=${until}`:`RRULE:FREQ=WEEKLY;BYDAY=WE;UNTIL=${until}`;
+      const extra=[rrule,...ex.map(x=>'EXDATE:'+x)];
+      // weekly series pattern also hits first Wednesdays — exclude them
+      if(!first)extra.push(...mtOcc.filter(o=>o.first&&o.date>anchor.date).map(o=>'EXDATE:'+dt(o.date,sh,sm)));
+      push(anchor,extra);
+    }
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+function renderMtPreview(){
+  const box=$('mtPreview');
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const title=$('mtTitle').value.trim()||'Tech Team Meeting';
+  const team=$('mtTeam').value.split(/[,;\n]/).map(s=>s.trim()).filter(s=>/@/.test(s));
+  const inc=mtOcc.filter(o=>o.include);
+  const timeStr=`${$('mtStart').value}–${$('mtEnd').value}`;
+  const series=$('mtModeSeries').checked;
+  const fmtD=d=>d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  let html='';
+  // email impact banner — the thing the user is worried about
+  const emails=series?2:inc.length;
+  html+=`<div class="banner ${series?'ok':'warn'}">When you click Send after import, each attendee receives <strong>${emails} invitation email${emails!==1?'s':''}</strong>${series?' (one per series, covering all dates)':' — one per Wednesday. Consider series mode to reduce this to 2.'}</div>`;
+  if(!team.length)html+=`<div class="banner warn">No attendees entered — the events will import with only the rooms attached. Paste the team above if they should be invited.</div>`;
+  if(series){
+    for(const first of[true,false]){
+      const set=inc.filter(o=>o.first===first);
+      if(!set.length)continue;
+      const room=first?MT_ROOMS.msLarge:MT_ROOMS.bliss;
+      const skipped=mtOcc.filter(o=>o.first===first&&!o.include);
+      html+=`<div class="draft">
+        <div class="dhead"><span>${escH(title)}</span><span class="dtag">RECURRING SERIES — DRAFT</span></div>
+        <dl class="dfields">
+          <dt>Pattern</dt><dd>${first?'First Wednesday of each month':'Every Wednesday (except first of month)'}, ${timeStr}</dd>
+          <dt>Range</dt><dd>${fmtD(set[0].date)} → ${fmtD(set[set.length-1].date)} · ${set.length} occurrence${set.length!==1?'s':''}</dd>
+          <dt>Location</dt><dd>${escH(room.name)} <span class="dres">(room mailbox attached — booked when you Send)</span></dd>
+          <dt>Required</dt><dd>${team.map(escH).join('; ')||'—'}</dd>
+          ${skipped.length?`<dt>Skipped</dt><dd>${skipped.map(o=>fmtD(o.date)+(o.holiday?' ('+escH(o.holiday)+')':'')).join('; ')}</dd>`:''}
+        </dl>
+        <div class="dbody">Dates: ${set.map(o=>fmtD(o.date)).join(' · ')}</div>
+      </div>`;
+    }
+  }else{
+    html+=`<div class="draft"><div class="dhead"><span>${escH(title)} × ${inc.length}</span><span class="dtag">INDIVIDUAL EVENTS — DRAFT</span></div>
+      <dl class="dfields"><dt>Required</dt><dd>${team.map(escH).join('; ')||'—'}</dd></dl>
+      <div class="dbody">${inc.map(o=>`${fmtD(o.date)} · ${timeStr} · ${escH(o.room.name)}`).join('\n')}</div></div>`;
+  }
+  html+=`<details class="rawics"><summary>Show raw .ics source</summary><pre>${escH(mtBuildICS())}</pre></details>`;
+  box.innerHTML=html;box.style.display='block';
+}
+$('mtPvBtn').addEventListener('click',()=>{
+  if($('mtPreview').style.display==='block'){$('mtPreview').style.display='none';$('mtPvBtn').textContent='Preview — what gets created & who gets emailed';}
+  else{renderMtPreview();$('mtPvBtn').textContent='Hide preview';}
+});
+$('mtDlBtn').addEventListener('click',()=>{
+  const blob=new Blob([mtBuildICS()],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='tech-team-meetings.ics';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
+
+/* ---------------- wiring ---------------- */
+function renderPreview(){
+  const box=$('preview');
+  if(!parsed){box.style.display='none';return;}
+  const title=`[Tech Request] - ${parsed.header.event||'Event'}`;
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const fmtRange=e=>`${fmtDay(e.setupStart)} · ${isoT(e.setupStart)}–${isoT(e.setupEnd)}`;
+  let html='';
+  for(const e of parsed.events){
+    if(!e.include)continue;
+    const c=composeEvent(e,title);
+    html+=`<div class="draft">
+      <div class="dhead"><span>${escH(c.title)}</span><span class="dtag">DRAFT — not yet imported</span></div>
+      <dl class="dfields">
+        <dt>When</dt><dd>${fmtRange(e)} <span style="color:var(--ink-soft)">(setup block)</span></dd>
+        <dt>Location</dt><dd>${escH(c.locStr)}</dd>
+        <dt>Required</dt><dd>${c.attendees.map(escH).join('; ')||'—'}</dd>
+        ${c.resources.length?`<dt>Rooms</dt><dd class="dres">${c.resources.map(r=>escH(r.name)).join('; ')} <span style="color:var(--ink-soft)">(attached as resources — not booked until you hit Send in Outlook)</span></dd>`:''}
+      </dl>
+      <div class="dbody">${escH(c.desc)}</div>
+    </div>`;
+  }
+  html+=`<details class="rawics"><summary>Show raw .ics source</summary><pre>${escH(buildICS())}</pre></details>`;
+  box.innerHTML=html;
+  box.style.display='block';
+}
+$('pvBtn').addEventListener('click',()=>{
+  if($('preview').style.display==='block'){$('preview').style.display='none';$('pvBtn').textContent='Preview drafts — see exactly what Outlook will show';}
+  else{renderPreview();$('pvBtn').textContent='Hide preview';}
+});
+$('parseBtn').addEventListener('click',()=>{
+  const err=$('parseError');err.style.display='none';
+  try{
+    parsed=parseEmail($('raw').value);
+    if(!parsed.events.length){err.textContent='No event blocks found — make sure the paste includes the “Location:” and “Date & Time:” lines.';err.style.display='block';parsed=null;render();return;}
+    render();
+  }catch(ex){err.textContent='Could not parse: '+ex.message;err.style.display='block';}
+});
+$('dlBtn').addEventListener('click',()=>{
+  const blob=new Blob([buildICS()],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`tech-request-${(parsed.header.permit||'events').replace(/\W+/g,'-')}.ics`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
+})();
+</script>
+</body>
+</html>
