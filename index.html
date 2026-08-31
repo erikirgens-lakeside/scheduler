@@ -101,6 +101,7 @@
   <nav class="tabs" role="tablist">
     <button class="tab active" id="tabBtn-rschool" role="tab" aria-selected="true">RSchool Requests</button>
     <button class="tab" id="tabBtn-meetings" role="tab" aria-selected="false">Team Meetings</button>
+    <button class="tab" id="tabBtn-digest" role="tab" aria-selected="false">Weekly Digest</button>
   </nav>
 
   <div id="tab-rschool">
@@ -181,6 +182,28 @@
     </section>
   </div>
   </div><!-- /tab-meetings -->
+
+  <div id="tab-digest" style="display:none">
+  <div class="grid">
+    <section class="panel">
+      <h2>1 · Paste the weekly “Other Needs Use List” page</h2>
+      <textarea id="dgRaw" style="min-height:240px" placeholder="Open the report link, Ctrl/Cmd+A, copy, and paste the whole page here…" spellcheck="false"></textarea>
+      <div class="actions"><button class="btn primary" id="dgParseBtn">Parse digest</button></div>
+      <div class="banner err" id="dgError" style="display:none"></div>
+      <p class="hint" style="margin-top:14px">This report is already filtered to Audio/Visual – Tech Support, so every listed item is kept by default. Team defaults and location rules from the <strong>RSchool Requests</strong> tab apply here too.</p>
+      <p class="hint">Since this is the Monday reminder for the coming week, most events are probably already on the calendar — <strong>uncheck anything you’ve already scheduled</strong> so the export only contains what’s new.</p>
+    </section>
+
+    <section class="panel">
+      <h2>2 · Review setup events &amp; export</h2>
+      <div id="dgResults"><div class="empty">Parsed events appear here, one card per event.<br>Each event’s items, contact, and setup notes are grouped automatically.</div></div>
+      <button class="btn ghost big" id="dgPvBtn" disabled style="margin-bottom:8px">Preview drafts</button>
+      <div id="dgPreview" style="display:none"></div>
+      <button class="btn primary big" id="dgDlBtn" disabled>Download .ics</button>
+      <p class="note" id="dgNote" style="display:none"><strong>Import:</strong> same as the other tabs — import writes the events silently; no invitations go out until you open an event and click Send.</p>
+    </section>
+  </div>
+  </div><!-- /tab-digest -->
 </div>
 
 <script>
@@ -576,15 +599,15 @@ let mtOcc=[]; // generated occurrences
 
 // tab switching
 function showTab(which){
-  $('tab-rschool').style.display=which==='rschool'?'':'none';
-  $('tab-meetings').style.display=which==='meetings'?'':'none';
-  $('tabBtn-rschool').classList.toggle('active',which==='rschool');
-  $('tabBtn-meetings').classList.toggle('active',which==='meetings');
-  $('tabBtn-rschool').setAttribute('aria-selected',which==='rschool');
-  $('tabBtn-meetings').setAttribute('aria-selected',which==='meetings');
+  for(const t of['rschool','meetings','digest']){
+    $('tab-'+t).style.display=which===t?'':'none';
+    $('tabBtn-'+t).classList.toggle('active',which===t);
+    $('tabBtn-'+t).setAttribute('aria-selected',which===t);
+  }
 }
 $('tabBtn-rschool').addEventListener('click',()=>showTab('rschool'));
 $('tabBtn-meetings').addEventListener('click',()=>showTab('meetings'));
+$('tabBtn-digest').addEventListener('click',()=>showTab('digest'));
 
 // --- US federal holidays (auto-skip) + likely school breaks (flag only) ---
 function nthDow(y,m,dow,n){const d=new Date(y,m,1);const off=(dow-d.getDay()+7)%7;return new Date(y,m,1+off+(n-1)*7);}
@@ -752,6 +775,237 @@ $('mtDlBtn').addEventListener('click',()=>{
   const blob=new Blob([mtBuildICS()],{type:'text/calendar;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download='tech-team-meetings.ics';
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
+
+/* ================= WEEKLY DIGEST TAB ================= */
+let dg=null;
+const CATEGORY_RE=/^(Audio\/Visual|Athletic|Facilit|Food|Maintenance|Technology|Custodial|Grounds|Nutrition|Transport)/i;
+
+function dgParse(text){
+  const lines=text.split(/\r?\n/);
+  const meta={generated:'',range:''};
+  const events=[];let cur=null,notesMode=false;
+  const splitRow=l=>l.includes('\t')?l.split('\t'):l.split(/\s{2,}/);
+  for(const raw of lines){
+    const line=raw.replace(/\s+$/,'');
+    if(!line.trim()){notesMode=false;continue;}
+    if(/^Generated:/i.test(line)){meta.generated=line.replace(/^Generated:\s*/i,'').trim();continue;}
+    if(/^Date range:/i.test(line)){meta.range=line.replace(/^Date range:\s*/i,'').trim();continue;}
+    if(/^Other Needs Use List/i.test(line))continue;
+    if(/^Date[\t ]+Activity/i.test(line))continue;
+    if(/^Time[\t ]+(Start|End|Teardown|Client)/i.test(line))continue;
+    const dm=line.match(/^(\d{1,2}\/\d{1,2}\/\d{4})/);
+    if(dm){ // new event row
+      notesMode=false;
+      const p=splitRow(line);
+      const ev={date:dm[1],activity:(p[1]||'').trim(),permit:(p[2]||'').trim(),
+        building:(p[3]||'').trim(),location:(p[4]||'').trim(),
+        setupT:(p[8]||'').trim(),startT:(p[9]||'').trim(),endT:(p[10]||'').trim(),teardownT:(p[11]||'').trim(),
+        client:(p[12]||'').trim(),contact:'',phone:'',notes:'',items:[],include:true,notesInclude:true};
+      const item=(p[6]||'').trim(),qty=(p[7]||'').trim();
+      if(item)ev.items.push({text:qty&&qty!=='1'?`(${qty}) ${item}`:item,keep:true});
+      ev.locs=[ev.location&&ev.building?`${ev.location} - ${ev.building}`:(ev.location||ev.building)];
+      ev.locLabel=ev.locs[0];
+      events.push(ev);cur=ev;continue;
+    }
+    if(/^Setup Notes:/i.test(line)){if(cur){cur.notes=line.replace(/^Setup Notes:\s*/i,'').trim();notesMode=true;}continue;}
+    if(cur&&/^Phone:/i.test(line)){cur.phone=line.replace(/^Phone:\s*/i,'').trim();notesMode=false;continue;}
+    if(cur&&(CATEGORY_RE.test(line)||(/\t/.test(line)&&!notesMode))){ // additional item row
+      const p=splitRow(line);
+      const item=(p[1]||'').trim(),qty=(p[2]||'').trim();
+      if(item){cur.items.push({text:qty&&qty!=='1'?`(${qty}) ${item}`:item,keep:true});notesMode=false;continue;}
+    }
+    if(cur&&!notesMode&&/^[A-Z][A-Za-z.'’-]+,\s*[A-Z]/.test(line)&&line.length<60){cur.contact=line.trim();continue;}
+    if(cur&&notesMode){cur.notes+=' '+line.trim();continue;}
+  }
+  for(const e of events){e.roomSel=matchRooms(e);e.isWebinar=/webinar/i.test(e.activity+' '+e.notes);}
+  dgApplyTiming(events);
+  return{meta,events};
+}
+
+function dgApplyTiming(events){
+  for(const e of events){
+    e.flags=[];
+    const startM=to24(e.startT),endM=to24(e.endT);
+    e.startM=startM;e.endM=endM;
+    e.rschoolSetup=to24(e.setupT);
+    if(startM==null){e.flags.push({t:'NO START TIME — CHECK',warn:true});e.setupStart=jsDate(e.date,9*60);e.setupEnd=jsDate(e.date,9*60+SETUP_MIN);continue;}
+    const evStart=jsDate(e.date,startM),dow=evStart.getDay();
+    if(dow===0||dow===6){
+      const fri=new Date(evStart);fri.setDate(fri.getDate()-(dow===6?1:2));
+      e.setupStart=new Date(fri.getFullYear(),fri.getMonth(),fri.getDate(),Math.floor(FRIDAY_SETUP/60),FRIDAY_SETUP%60);
+      e.flags.push({t:'WEEKEND → FRI SETUP',warn:true});
+    }else if(startM>BUSINESS_END){
+      e.setupStart=jsDate(e.date,AFTERHOURS_SETUP);
+      e.flags.push({t:'AFTER HOURS',warn:false});
+      if(e.isWebinar)e.flags.push({t:'WEBINAR — CONFIRM TIMING',warn:true});
+    }else{
+      e.setupStart=jsDate(e.date,startM-SETUP_MIN);
+    }
+    if(e.isWebinar&&!(startM>BUSINESS_END))e.flags.push({t:'WEBINAR',warn:false});
+    e.setupEnd=new Date(e.setupStart.getTime()+SETUP_MIN*60000);
+  }
+  const byDay={};
+  for(const e of events){(byDay[isoD(e.setupStart)]??=[]).push(e);}
+  for(const day of Object.values(byDay)){
+    day.sort((a,b)=>a.setupStart-b.setupStart);
+    for(let i=1;i<day.length;i++){
+      const prev=day[i-1],cur=day[i];
+      if(cur.setupStart<prev.setupEnd){
+        cur.setupStart=new Date(prev.setupEnd);
+        cur.setupEnd=new Date(cur.setupStart.getTime()+SETUP_MIN*60000);
+        cur.flags.push({t:'STAGGERED',warn:false});
+        if(cur.startM!=null){const evS=jsDate(cur.date,cur.startM);
+          if(isoD(cur.setupStart)===isoD(evS)&&cur.setupEnd>evS)cur.flags.push({t:'CHECK OVERLAP',warn:true});}
+      }
+    }
+  }
+}
+
+function dgRoomPicker(e,i){
+  const rooms=roomList();
+  const chips=e.roomSel.map(idx=>rooms[idx]?`<label><input type="checkbox" data-dg="room" data-i="${i}" data-idx="${idx}" checked><span>${rooms[idx].name}${rooms[idx].email?' <span style="color:var(--accent-dark)">· resource</span>':''}</span></label>`:'').join('');
+  const options=rooms.map((r,idx)=>e.roomSel.includes(idx)?'':`<option value="${idx}">${r.name}</option>`).join('');
+  return `<div class="items"><div class="lbl">Outlook location</div>
+    ${chips||'<span class="hint" style="font-size:12.5px">No match — pick one below, or the RSchool text is used as-is.</span>'}
+    <select data-dg="roomadd" data-i="${i}" style="margin-top:5px;font-size:12.5px;padding:4px 6px;border:1px solid var(--line);border-radius:5px;font-family:inherit;color:var(--ink)">
+      <option value="">Add a room…</option>${options}</select></div>`;
+}
+
+function dgRender(){
+  const box=$('dgResults');
+  if(!dg||!dg.events.length){box.innerHTML='<div class="empty">Nothing parsed yet.</div>';$('dgDlBtn').disabled=true;$('dgPvBtn').disabled=true;$('dgNote').style.display='none';return;}
+  const n=dg.events.filter(e=>e.include).length;
+  let html=`<div class="banner ok"><span>${dg.events.length} event${dg.events.length!==1?'s':''} · ${dg.meta.range||'range n/a'}</span><span>${n} selected</span></div>`;
+  dg.events.forEach((e,i)=>{
+    const evStart=e.startM!=null?jsDate(e.date,e.startM):jsDate(e.date,0);
+    const rsSetup=e.rschoolSetup!=null?minsToLabel(e.rschoolSetup):null;
+    const ours=`${isoT(e.setupStart)}`;
+    const differs=rsSetup&&e.rschoolSetup!==(e.setupStart.getHours()*60+e.setupStart.getMinutes());
+    html+=`<div class="card${e.include?'':' off'}"><div class="spine"></div><div class="body">
+      <div class="row1"><span class="date">${fmtDay(evStart)}</span>
+        <label class="inc"><input type="checkbox" data-dg="inc" data-i="${i}" ${e.include?'checked':''}>Include</label></div>
+      <div style="font-weight:600;margin-top:2px">${e.activity||'(untitled)'}</div>
+      ${e.flags.length?`<div class="flags">${e.flags.map(f=>`<span class="flag${f.warn?'':' info'}">${f.t}</span>`).join('')}</div>`:''}
+      <dl class="meta">
+        <dt>Actual event</dt><dd>${e.startM!=null?minsToLabel(e.startM):'—'}–${e.endM!=null?minsToLabel(e.endM):'—'}</dd>
+        <dt>Room (RSchool)</dt><dd>${e.locLabel}</dd>
+        <dt>Requested by</dt><dd>${[e.contact,e.phone].filter(Boolean).join(' · ')||e.client||'—'}</dd>
+        ${rsSetup?`<dt>RSchool setup</dt><dd>${rsSetup}${differs?` <button class="btn ghost" data-dg="userschool" data-i="${i}" style="padding:1px 7px;font-size:11.5px;margin-left:4px">use this</button>`:''}</dd>`:''}
+      </dl>
+      ${dgRoomPicker(e,i)}
+      <div class="setupbox"><div class="lbl">Tech setup block</div>
+        <div class="timeedit">
+          <input type="date" data-dg="sdate" data-i="${i}" value="${isoD(e.setupStart)}" aria-label="Setup date">
+          <input type="time" data-dg="sstart" data-i="${i}" value="${ours}" aria-label="Setup start">–
+          <input type="time" data-dg="send" data-i="${i}" value="${isoT(e.setupEnd)}" aria-label="Setup end">
+        </div>
+        <div class="wholist">Inviting: ${attendeesFor(e).join(', ')||'—'}</div>
+      </div>
+      <div class="items"><div class="lbl">Items (${e.items.length})</div>
+        ${e.items.map((it,j)=>`<label class="${it.keep?'':'dropped'}"><input type="checkbox" data-dg="item" data-i="${i}" data-j="${j}" ${it.keep?'checked':''}><span>${it.text}</span></label>`).join('')||'<span style="color:var(--ink-soft)">None listed.</span>'}
+      </div>
+      ${e.notes?`<label class="noteslab"><input type="checkbox" data-dg="notesinc" data-i="${i}" ${e.notesInclude?'checked':''}>Include setup notes</label>
+      <textarea data-dg="notes" data-i="${i}" ${e.notesInclude?'':'disabled'}>${e.notes}</textarea>`:''}
+    </div></div>`;
+  });
+  box.innerHTML=html;
+  $('dgDlBtn').disabled=n===0;$('dgPvBtn').disabled=n===0;
+  $('dgPreview').style.display='none';$('dgPvBtn').textContent='Preview drafts';
+  $('dgNote').style.display='block';
+  box.querySelectorAll('[data-dg]').forEach(el=>{
+    const ev=el.tagName==='BUTTON'?'click':'change';
+    el.addEventListener(ev,event=>{
+      const t=event.currentTarget,i=+t.dataset.i,e=dg.events[i];
+      switch(t.dataset.dg){
+        case'inc':e.include=t.checked;dgRender();break;
+        case'item':e.items[+t.dataset.j].keep=t.checked;dgRender();break;
+        case'notesinc':e.notesInclude=t.checked;dgRender();break;
+        case'notes':e.notes=t.value;break;
+        case'room':{const idx=+t.dataset.idx;e.roomSel=t.checked?[...new Set([...e.roomSel,idx])]:e.roomSel.filter(x=>x!==idx);dgRender();break;}
+        case'roomadd':{if(t.value!==''){e.roomSel=[...new Set([...e.roomSel,+t.value])];dgRender();}break;}
+        case'userschool':{const m=e.rschoolSetup;e.setupStart=jsDate(e.date,m);e.setupEnd=new Date(e.setupStart.getTime()+SETUP_MIN*60000);dgRender();break;}
+        case'sdate':{const[_,y,mo,d]=t.value.match(/(\d+)-(\d+)-(\d+)/)||[];if(y){
+          e.setupStart=new Date(+y,+mo-1,+d,e.setupStart.getHours(),e.setupStart.getMinutes());
+          e.setupEnd=new Date(+y,+mo-1,+d,e.setupEnd.getHours(),e.setupEnd.getMinutes());}break;}
+        case'sstart':{const[h,m]=t.value.split(':');e.setupStart.setHours(+h,+m);break;}
+        case'send':{const[h,m]=t.value.split(':');e.setupEnd.setHours(+h,+m);break;}
+      }
+    });
+  });
+}
+
+function dgCompose(e){
+  const rooms=roomList();
+  const selRooms=e.roomSel.map(idx=>rooms[idx]).filter(Boolean);
+  const locStr=selRooms.length?selRooms.map(r=>r.name).join('; '):e.locLabel;
+  const desc=[];
+  desc.push(`ACTUAL EVENT: ${fmtDay(e.startM!=null?jsDate(e.date,e.startM):jsDate(e.date,0))}, ${e.startM!=null?minsToLabel(e.startM):'?'}–${e.endM!=null?minsToLabel(e.endM):'?'}`);
+  desc.push(`Location: ${locStr}${selRooms.length&&locStr!==e.locLabel?` (RSchool: ${e.locLabel})`:''}`);
+  desc.push(`Permit ${e.permit||'—'} · Requested by: ${[e.contact,e.phone].filter(Boolean).join(' · ')||e.client||'—'}`);
+  if(e.setupT||e.teardownT)desc.push(`RSchool setup/teardown: ${e.setupT||'—'} / ${e.teardownT||'—'}`);
+  const kept=e.items.filter(i=>i.keep);
+  if(kept.length)desc.push('\nTech needed:\n'+kept.map(i=>'• '+i.text).join('\n'));
+  if(e.notesInclude&&e.notes.trim())desc.push('\nSetup notes:\n'+e.notes.trim());
+  return{title:`[Tech Request] - ${e.activity||'Event'}`,locStr,
+    attendees:attendeesFor(e),resources:selRooms.filter(r=>r.email),desc:desc.join('\n')};
+}
+
+function dgBuildICS(){
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z/,'Z');
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TechRequestScheduler//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  for(const e of dg.events){
+    if(!e.include)continue;
+    const c=dgCompose(e);
+    const uid=`${(e.permit||'evt').replace(/\W/g,'')}-${dToICS(e.setupStart)}-${Math.random().toString(36).slice(2,8)}@tech-request`;
+    lines.push('BEGIN:VEVENT',fold('UID:'+uid),'DTSTAMP:'+stamp,
+      'DTSTART:'+dToICS(e.setupStart),'DTEND:'+dToICS(e.setupEnd),
+      fold('SUMMARY:'+esc(c.title)),fold('LOCATION:'+esc(c.locStr)),fold('DESCRIPTION:'+esc(c.desc)));
+    for(const a of c.attendees)lines.push(fold(`ATTENDEE;ROLE=REQ-PARTICIPANT;CN=${esc(a)}:mailto:${a}`));
+    for(const r of c.resources)lines.push(fold(`ATTENDEE;CUTYPE=RESOURCE;ROLE=NON-PARTICIPANT;CN=${esc(r.name)}:mailto:${r.email}`));
+    lines.push('END:VEVENT');
+  }
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+function dgRenderPreview(){
+  const box=$('dgPreview');
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html='';
+  for(const e of dg.events){
+    if(!e.include)continue;
+    const c=dgCompose(e);
+    html+=`<div class="draft">
+      <div class="dhead"><span>${escH(c.title)}</span><span class="dtag">DRAFT — not yet imported</span></div>
+      <dl class="dfields">
+        <dt>When</dt><dd>${fmtDay(e.setupStart)} · ${isoT(e.setupStart)}–${isoT(e.setupEnd)} <span style="color:var(--ink-soft)">(setup block)</span></dd>
+        <dt>Location</dt><dd>${escH(c.locStr)}</dd>
+        <dt>Required</dt><dd>${c.attendees.map(escH).join('; ')||'—'}</dd>
+        ${c.resources.length?`<dt>Rooms</dt><dd class="dres">${c.resources.map(r=>escH(r.name)).join('; ')}</dd>`:''}
+      </dl><div class="dbody">${escH(c.desc)}</div></div>`;
+  }
+  html+=`<details class="rawics"><summary>Show raw .ics source</summary><pre>${escH(dgBuildICS())}</pre></details>`;
+  box.innerHTML=html;box.style.display='block';
+}
+$('dgPvBtn').addEventListener('click',()=>{
+  if($('dgPreview').style.display==='block'){$('dgPreview').style.display='none';$('dgPvBtn').textContent='Preview drafts';}
+  else{dgRenderPreview();$('dgPvBtn').textContent='Hide preview';}
+});
+$('dgParseBtn').addEventListener('click',()=>{
+  const err=$('dgError');err.style.display='none';
+  try{
+    dg=dgParse($('dgRaw').value);
+    if(!dg.events.length){err.textContent='No event rows found. Make sure you copied the whole report page (rows should start with a date like 9/8/2026).';err.style.display='block';dg=null;dgRender();return;}
+    dgRender();
+  }catch(ex){err.textContent='Could not parse: '+ex.message;err.style.display='block';}
+});
+$('dgDlBtn').addEventListener('click',()=>{
+  const blob=new Blob([dgBuildICS()],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=`tech-requests-week-${(dg.meta.range||'').replace(/[^\d]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')||'digest'}.ics`;
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 });
