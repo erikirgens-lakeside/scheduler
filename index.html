@@ -102,6 +102,7 @@
     <button class="tab active" id="tabBtn-rschool" role="tab" aria-selected="true">RSchool Requests</button>
     <button class="tab" id="tabBtn-meetings" role="tab" aria-selected="false">Team Meetings</button>
     <button class="tab" id="tabBtn-digest" role="tab" aria-selected="false">Weekly Digest</button>
+    <button class="tab" id="tabBtn-webinar" role="tab" aria-selected="false">Webinars</button>
   </nav>
 
   <div id="tab-rschool">
@@ -204,6 +205,39 @@
     </section>
   </div>
   </div><!-- /tab-digest -->
+
+  <div id="tab-webinar" style="display:none">
+  <div class="grid">
+    <section class="panel">
+      <h2>1 &middot; Paste webinar details</h2>
+      <textarea id="wbRaw" style="min-height:230px" placeholder="Paste any of: Zoom API JSON, one or more &ldquo;Copy Invitation&rdquo; blocks, or simple lines (see formats below)&hellip;" spellcheck="false"></textarea>
+      <div class="actions"><button class="btn primary" id="wbParseBtn">Parse webinars</button></div>
+      <div class="banner err" id="wbError" style="display:none"></div>
+      <div class="field">
+        <label for="wbSetupMin">Setup lead time (minutes before start)</label>
+        <input type="text" id="wbSetupMin" value="15" style="width:90px">
+      </div>
+      <label class="checkrow"><input type="checkbox" id="wbSplit">Create a separate setup event instead of extending the block earlier</label>
+      <details style="margin-top:14px"><summary style="cursor:pointer;font-weight:600;color:var(--accent-dark);font-size:13px">Accepted input formats</summary>
+        <p class="hint" style="margin-top:8px"><strong>1. Zoom API JSON</strong> &mdash; the cleanest bulk option. Response from <span style="font-family:var(--mono)">GET /users/{userId}/webinars</span>; recurring occurrences are expanded automatically.</p>
+        <p class="hint"><strong>2. Copy Invitation blocks</strong> &mdash; paste one or many, back to back. Reads Topic, Time, join link, meeting ID and passcode.</p>
+        <p class="hint"><strong>3. Simple lines</strong> &mdash; one webinar per line, pipe-separated:<br>
+        <span style="font-family:var(--mono);font-size:11.5px">9/22/2026 | 10:00am | 60 | Fall Parent Info Night | https://&hellip;zoom.us/j/123 | Vassar 140 | Optional description</span><br>
+        Physical location and description are optional; leave them blank or omit them.</p>
+      </details>
+      <p class="hint" style="margin-top:10px">Attendees come from the team defaults on the <strong>RSchool Requests</strong> tab. If a physical location is given, it takes over the Outlook Location field and the Zoom link stays in the description.</p>
+    </section>
+
+    <section class="panel">
+      <h2>2 &middot; Review &amp; export</h2>
+      <div id="wbResults"><div class="empty">Parsed webinars appear here.<br>Each becomes <span style="font-family:var(--mono);font-size:12px">[Webinar] - Name</span> with setup time built in.</div></div>
+      <button class="btn ghost big" id="wbPvBtn" disabled style="margin-bottom:8px">Preview drafts</button>
+      <div id="wbPreview" style="display:none"></div>
+      <button class="btn primary big" id="wbDlBtn" disabled>Download .ics</button>
+      <p class="note" id="wbNote" style="display:none"><strong>Import:</strong> silent as always &mdash; no invitations until you open an event and click Send.</p>
+    </section>
+  </div>
+  </div><!-- /tab-webinar -->
 </div>
 
 <script>
@@ -599,7 +633,7 @@ let mtOcc=[]; // generated occurrences
 
 // tab switching
 function showTab(which){
-  for(const t of['rschool','meetings','digest']){
+  for(const t of['rschool','meetings','digest','webinar']){
     $('tab-'+t).style.display=which===t?'':'none';
     $('tabBtn-'+t).classList.toggle('active',which===t);
     $('tabBtn-'+t).setAttribute('aria-selected',which===t);
@@ -608,6 +642,7 @@ function showTab(which){
 $('tabBtn-rschool').addEventListener('click',()=>showTab('rschool'));
 $('tabBtn-meetings').addEventListener('click',()=>showTab('meetings'));
 $('tabBtn-digest').addEventListener('click',()=>showTab('digest'));
+$('tabBtn-webinar').addEventListener('click',()=>showTab('webinar'));
 
 // --- US federal holidays (auto-skip) + likely school breaks (flag only) ---
 function nthDow(y,m,dow,n){const d=new Date(y,m,1);const off=(dow-d.getDay()+7)%7;return new Date(y,m,1+off+(n-1)*7);}
@@ -1006,6 +1041,263 @@ $('dgDlBtn').addEventListener('click',()=>{
   const blob=new Blob([dgBuildICS()],{type:'text/calendar;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
   a.download=`tech-requests-week-${(dg.meta.range||'').replace(/[^\d]/g,'-').replace(/-+/g,'-').replace(/^-|-$/g,'')||'digest'}.ics`;
+  document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+});
+
+/* ================= WEBINARS TAB ================= */
+let wb=null;
+const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+
+function wbSetupMin(){const n=parseInt($('wbSetupMin').value,10);return isNaN(n)||n<0?15:n;}
+
+// "Sep 15, 2026 10:00 AM" / "Sep 15, 2026 10:00 AM Pacific Time (US and Canada)"
+function wbParseTimeStr(s){
+  const m=s.match(/([A-Za-z]{3})[a-z]*\s+(\d{1,2}),?\s+(\d{4})\s+(\d{1,2}):(\d{2})\s*([AaPp])/);
+  if(!m)return null;
+  const mo=MONTHS[m[1].toLowerCase()];if(mo===undefined)return null;
+  let h=+m[4];if(m[6].toLowerCase()==='p'&&h!==12)h+=12;if(m[6].toLowerCase()==='a'&&h===12)h=0;
+  return new Date(+m[3],mo,+m[2],h,+m[5]);
+}
+const ZOOM_URL=/https?:\/\/[\w.-]*zoom\.us\/[^\s<>"')]+/i;
+
+function wbParse(text){
+  const t=text.trim();
+  if(!t)return[];
+  if(/^[\[{]/.test(t)){const j=wbFromJSON(t);if(j)return j;}
+  if(/(^|\n)[ \t]*(When|Time|Topic):/i.test(t)&&/\d{1,2}:\d{2}\s*[AaPp]/.test(t))return wbFromInvites(t);
+  return wbFromLines(t);
+}
+
+function wbFromJSON(txt){
+  let j;try{j=JSON.parse(txt);}catch(e){return null;}
+  const arr=Array.isArray(j)?j:(j.webinars||j.meetings||[]);
+  if(!arr.length)return null;
+  const out=[];
+  for(const w of arr){
+    const base={topic:w.topic||w.agenda||'Webinar',join:w.join_url||w.registration_url||'',
+      agenda:(w.agenda||'').trim(),duration:w.duration||60,passcode:w.password||w.passcode||'',
+      meetingId:w.id?String(w.id):''};
+    const occs=Array.isArray(w.occurrences)&&w.occurrences.length?w.occurrences:[{start_time:w.start_time,duration:w.duration}];
+    for(const o of occs){
+      if(!o.start_time)continue;
+      const d=new Date(o.start_time); // ISO with Z converts to local
+      if(isNaN(d))continue;
+      out.push({...base,duration:o.duration||base.duration,start:d,physical:'',include:true,notesInclude:!!base.agenda});
+    }
+  }
+  return out.length?out:null;
+}
+
+function wbFromInvites(txt){
+  const out=[];
+  const topics=[...txt.matchAll(/(?:^|\n)[ \t]*Topic:[ \t]*(.+)/gi)].map(m=>({i:m.index,v:m[1].trim()}));
+  const times=[...txt.matchAll(/(?:^|\n)[ \t]*(?:When|Time):[ \t]*(.*)/gi)].map(m=>({i:m.index,v:m[1].trim(),end:m.index+m[0].length}));
+  if(!times.length)return out;
+  const n=Math.max(topics.length,times.length);
+  // a record starts at whichever of its Topic/When lines comes first (order differs by invite type)
+  const starts=[];
+  for(let k=0;k<n;k++){
+    const a=times[k]?times[k].i:Infinity,b=topics[k]?topics[k].i:Infinity;
+    starts.push(Math.min(a,b)===Infinity?0:Math.min(a,b));
+  }
+  for(let k=0;k<n;k++){
+    const tf=times[k];if(!tf)continue;
+    const span=txt.slice(starts[k],starts[k+1]!==undefined?starts[k+1]:txt.length);
+    const topic=(topics[k]&&topics[k].v)||'Webinar';
+    const dts=[];
+    const first=wbParseTimeStr(tf.v);
+    if(first)dts.push(first);
+    // recurring invites list further occurrences on their own lines under When:
+    for(const line of txt.slice(tf.end,starts[k+1]??txt.length).split(/\r?\n/)){
+      const L=line.trim();if(!L)continue;
+      if(/^(Topic|Join|Please click|Webinar ID|Meeting ID|Passcode|Password|Phone|Or |One tap|International|Description|Every )/i.test(L))break;
+      const d=wbParseTimeStr(L);
+      if(d)dts.push(d);else break;
+    }
+    if(!dts.length)continue;
+    // pick the real join link, not the international-numbers (/u/) link
+    const urls=[...span.matchAll(/https?:\/\/[\w.-]*zoom\.us\/[^\s<>"')]+/gi)].map(m=>m[0]);
+    const join=urls.find(u=>/\/(j|w)\/\d+/.test(u))||urls.find(u=>/webinar\/register/i.test(u))||urls.find(u=>!/\/u\//.test(u))||'';
+    const id=(span.match(/(?:Webinar|Meeting)\s*ID:\s*([\d\s]+)/i)||[])[1];
+    const pass=(span.match(/(?:Passcode|Password):\s*(\S+)/i)||[])[1];
+    const desc=(span.match(/Description:\s*([\s\S]*?)(?=\n\s*(?:Topic:|When:|Time:|Join|Please click|Webinar ID:|Meeting ID:|Passcode:|$))/i)||[])[1];
+    for(const d of dts)out.push({topic,start:d,duration:60,join,agenda:(desc||'').trim(),
+      meetingId:(id||'').trim(),passcode:(pass||'').trim(),physical:'',include:true,notesInclude:!!desc});
+  }
+  return out;
+}
+
+function wbFromLines(txt){
+  const out=[];
+  for(const raw of txt.split(/\r?\n/)){
+    const line=raw.trim();if(!line)continue;
+    const p=line.split(/\s*\|\s*|\t/).map(s=>s.trim());
+    if(p.length<3)continue;
+    const dm=(p[0]||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);if(!dm)continue;
+    const tm=to24(p[1]||'');if(tm==null)continue;
+    const dur=parseInt(p[2],10);
+    // if field 3 isn't a number, treat it as the title and default duration
+    const hasDur=!isNaN(dur)&&/^\d+$/.test((p[2]||'').trim());
+    const title=hasDur?(p[3]||'Webinar'):(p[2]||'Webinar');
+    const rest=hasDur?p.slice(4):p.slice(3);
+    const join=rest.find(x=>ZOOM_URL.test(x))||'';
+    const others=rest.filter(x=>x&&x!==join);
+    out.push({topic:title,start:new Date(+dm[3],+dm[1]-1,+dm[2],Math.floor(tm/60),tm%60),
+      duration:hasDur?dur:60,join,physical:(others[0]||'').trim(),agenda:(others[1]||'').trim(),
+      meetingId:'',passcode:'',include:true,notesInclude:!!(others[1]||'').trim()});
+  }
+  return out;
+}
+
+function wbBlocks(w){ // returns {start,end} of the calendar block(s)
+  const lead=wbSetupMin();
+  const evStart=w.start,evEnd=new Date(w.start.getTime()+w.duration*60000);
+  if($('wbSplit').checked)
+    return{setup:{start:new Date(evStart.getTime()-lead*60000),end:new Date(evStart)},main:{start:evStart,end:evEnd}};
+  return{main:{start:new Date(evStart.getTime()-lead*60000),end:evEnd}};
+}
+
+function wbRooms(w){
+  if(!w.physical.trim())return[];
+  const fake={locs:[w.physical],locLabel:w.physical};
+  return matchRooms(fake).map(i=>roomList()[i]).filter(Boolean);
+}
+function wbAttendees(w){
+  return attendeesFor({locLabel:w.physical||''});
+}
+
+function wbCompose(w){
+  const rooms=wbRooms(w);
+  const locStr=w.physical.trim()?(rooms.length?rooms.map(r=>r.name).join('; '):w.physical.trim()):(w.join||'Zoom');
+  const evEnd=new Date(w.start.getTime()+w.duration*60000);
+  const d=[];
+  d.push(`WEBINAR: ${fmtDay(w.start)}, ${isoT(w.start)}–${isoT(evEnd)}`);
+  d.push(`Tech setup starts ${wbSetupMin()} minutes early.`);
+  if(w.join)d.push(`\nJoin link:\n${w.join}`);
+  if(w.meetingId)d.push(`Meeting ID: ${w.meetingId}${w.passcode?` · Passcode: ${w.passcode}`:''}`);
+  if(w.physical.trim())d.push(`\nPhysical location: ${w.physical.trim()}`);
+  if(w.notesInclude&&w.agenda.trim())d.push(`\nDescription:\n${w.agenda.trim()}`);
+  return{title:`[Webinar] - ${w.topic}`,locStr,rooms,attendees:wbAttendees(w),desc:d.join('\n')};
+}
+
+function wbRender(){
+  const box=$('wbResults');
+  if(!wb||!wb.length){box.innerHTML='<div class="empty">Nothing parsed yet.</div>';$('wbDlBtn').disabled=true;$('wbPvBtn').disabled=true;$('wbNote').style.display='none';return;}
+  const n=wb.filter(w=>w.include).length;
+  let html=`<div class="banner ok"><span>${wb.length} webinar${wb.length!==1?'s':''} parsed</span><span>${n} selected</span></div>`;
+  wb.forEach((w,i)=>{
+    const c=wbCompose(w),b=wbBlocks(w);
+    const evEnd=new Date(w.start.getTime()+w.duration*60000);
+    html+=`<div class="card${w.include?'':' off'}"><div class="spine"></div><div class="body">
+      <div class="row1"><span class="date">${fmtDay(w.start)}</span>
+        <label class="inc"><input type="checkbox" data-wb="inc" data-i="${i}" ${w.include?'checked':''}>Include</label></div>
+      <div style="font-weight:600;margin-top:2px">[Webinar] - ${w.topic}</div>
+      <div class="flags">
+        <span class="flag info">${isoT(w.start)}–${isoT(evEnd)} · ${w.duration} min</span>
+        ${w.physical.trim()?'<span class="flag info">PHYSICAL LOCATION SET</span>':''}
+        ${!w.join?'<span class="flag">NO ZOOM LINK</span>':''}
+      </div>
+      <dl class="meta">
+        <dt>Calendar block</dt><dd>${$('wbSplit').checked
+          ? `${isoT(b.setup.start)}–${isoT(b.setup.end)} setup · ${isoT(b.main.start)}–${isoT(b.main.end)} webinar`
+          : `${isoT(b.main.start)}–${isoT(b.main.end)} <span style="color:var(--ink-soft)">(incl. ${wbSetupMin()} min setup)</span>`}</dd>
+        <dt>Outlook location</dt><dd>${c.locStr.length>60?c.locStr.slice(0,60)+'…':c.locStr}</dd>
+      </dl>
+      <div class="items"><div class="lbl">Physical location (leave blank if online-only)</div>
+        <input type="text" data-wb="phys" data-i="${i}" value="${(w.physical||'').replace(/"/g,'&quot;')}" placeholder="e.g. Vassar 140" style="width:100%;border:1px solid var(--line);border-radius:5px;padding:6px 8px;font:inherit;font-size:13px">
+        ${c.rooms.length?`<div class="wholist">Matched Outlook room: ${c.rooms.map(r=>r.name).join('; ')} · attached as resource</div>`:''}
+      </div>
+      <div class="timeedit" style="margin-top:8px">
+        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600">Starts</span>
+        <input type="time" data-wb="stime" data-i="${i}" value="${isoT(w.start)}" aria-label="Webinar start time">
+        <span style="font-size:12.5px;color:var(--ink-soft);font-weight:600">Duration</span>
+        <input type="text" data-wb="dur" data-i="${i}" value="${w.duration}" style="width:58px;border:1px solid var(--line);border-radius:5px;padding:4px 6px;font-family:var(--mono);font-size:12.5px" aria-label="Duration in minutes"><span style="font-size:12.5px;color:var(--ink-soft)">min</span>
+      </div>
+      <div class="wholist" style="margin-top:8px">Inviting: ${c.attendees.join(', ')||'—'}</div>
+      ${w.agenda?`<label class="noteslab"><input type="checkbox" data-wb="notesinc" data-i="${i}" ${w.notesInclude?'checked':''}>Include Zoom description</label>
+      <textarea data-wb="notes" data-i="${i}" ${w.notesInclude?'':'disabled'}>${w.agenda}</textarea>`:''}
+    </div></div>`;
+  });
+  box.innerHTML=html;
+  $('wbDlBtn').disabled=n===0;$('wbPvBtn').disabled=n===0;
+  $('wbPreview').style.display='none';$('wbPvBtn').textContent='Preview drafts';
+  $('wbNote').style.display='block';
+  box.querySelectorAll('[data-wb]').forEach(el=>el.addEventListener('change',ev=>{
+    const t=ev.target,i=+t.dataset.i,w=wb[i];
+    switch(t.dataset.wb){
+      case'inc':w.include=t.checked;wbRender();break;
+      case'phys':w.physical=t.value;wbRender();break;
+      case'dur':{const n=parseInt(t.value,10);if(!isNaN(n)&&n>0)w.duration=n;wbRender();break;}
+      case'stime':{const[h,m]=t.value.split(':');if(h!==undefined){const d=new Date(w.start);d.setHours(+h,+m,0,0);w.start=d;}wbRender();break;}
+      case'notesinc':w.notesInclude=t.checked;wbRender();break;
+      case'notes':w.agenda=t.value;break;
+    }
+  }));
+}
+['wbSetupMin','wbSplit'].forEach(id=>$(id).addEventListener('change',()=>{if(wb)wbRender();}));
+
+function wbBuildICS(){
+  const stamp=new Date().toISOString().replace(/[-:]/g,'').replace(/\.\d+Z/,'Z');
+  const lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TechRequestScheduler//EN','CALSCALE:GREGORIAN','METHOD:PUBLISH'];
+  wb.forEach((w,i)=>{
+    if(!w.include)return;
+    const c=wbCompose(w),b=wbBlocks(w);
+    const add=(blk,suffix,titleOverride)=>{
+      lines.push('BEGIN:VEVENT',
+        fold(`UID:webinar-${dToICS(blk.start)}-${i}${suffix}-${Math.random().toString(36).slice(2,6)}@tech-request`),
+        'DTSTAMP:'+stamp,'DTSTART:'+dToICS(blk.start),'DTEND:'+dToICS(blk.end),
+        fold('SUMMARY:'+esc(titleOverride||c.title)),fold('LOCATION:'+esc(c.locStr)),
+        fold('DESCRIPTION:'+esc(c.desc)));
+      for(const a of c.attendees)lines.push(fold(`ATTENDEE;ROLE=REQ-PARTICIPANT;CN=${esc(a)}:mailto:${a}`));
+      for(const r of c.rooms)if(r.email)lines.push(fold(`ATTENDEE;CUTYPE=RESOURCE;ROLE=NON-PARTICIPANT;CN=${esc(r.name)}:mailto:${r.email}`));
+      lines.push('END:VEVENT');
+    };
+    if(b.setup)add(b.setup,'s',`${c.title} — SETUP`);
+    add(b.main,'m');
+  });
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
+function wbRenderPreview(){
+  const box=$('wbPreview');
+  const escH=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  let html='';
+  for(const w of wb){
+    if(!w.include)continue;
+    const c=wbCompose(w),b=wbBlocks(w);
+    const show=(blk,label,title)=>`<div class="draft">
+      <div class="dhead"><span>${escH(title)}</span><span class="dtag">${label}</span></div>
+      <dl class="dfields">
+        <dt>When</dt><dd>${fmtDay(blk.start)} · ${isoT(blk.start)}–${isoT(blk.end)}</dd>
+        <dt>Location</dt><dd>${escH(c.locStr)}</dd>
+        <dt>Required</dt><dd>${c.attendees.map(escH).join('; ')||'—'}</dd>
+        ${c.rooms.length?`<dt>Room</dt><dd class="dres">${c.rooms.map(r=>escH(r.name)).join('; ')}</dd>`:''}
+      </dl><div class="dbody">${escH(c.desc)}</div></div>`;
+    if(b.setup)html+=show(b.setup,'SETUP — DRAFT',c.title+' — SETUP');
+    html+=show(b.main,'DRAFT — not yet imported',c.title);
+  }
+  html+=`<details class="rawics"><summary>Show raw .ics source</summary><pre>${escH(wbBuildICS())}</pre></details>`;
+  box.innerHTML=html;box.style.display='block';
+}
+$('wbPvBtn').addEventListener('click',()=>{
+  if($('wbPreview').style.display==='block'){$('wbPreview').style.display='none';$('wbPvBtn').textContent='Preview drafts';}
+  else{wbRenderPreview();$('wbPvBtn').textContent='Hide preview';}
+});
+$('wbParseBtn').addEventListener('click',()=>{
+  const err=$('wbError');err.style.display='none';
+  try{
+    wb=wbParse($('wbRaw').value);
+    if(!wb||!wb.length){err.textContent='Nothing recognized. Check the accepted formats below the paste box — a date and start time are the minimum.';err.style.display='block';wb=null;wbRender();return;}
+    wb.sort((a,b)=>a.start-b.start);
+    wbRender();
+  }catch(ex){err.textContent='Could not parse: '+ex.message;err.style.display='block';}
+});
+$('wbDlBtn').addEventListener('click',()=>{
+  const blob=new Blob([wbBuildICS()],{type:'text/calendar;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='webinars.ics';
   document.body.appendChild(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href),4000);
 });
