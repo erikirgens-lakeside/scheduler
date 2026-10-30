@@ -288,8 +288,13 @@ $('roomsIn').addEventListener('change',()=>{
   saveSettings();
 });
 (async function(){
+  // Wait until the entire script has run so DEFAULT_ROOMS (defined further down) exists.
+  // Without this, browsers lacking window.storage crash here and load no rooms or rules.
+  await Promise.resolve();
   let rules=DEFAULT_RULES;
-  try{const r=await window.storage.get('tech-request-settings');
+  try{
+    if(!window.storage)throw new Error('no storage — using built-in defaults');
+    const r=await window.storage.get('tech-request-settings');
     if(r&&r.value){const s=JSON.parse(r.value);
       if(s.always)$('alwaysIn').value=s.always;
       if(s.rooms)$('roomsIn').value=s.rooms;
@@ -438,16 +443,24 @@ function parseEmail(text){
       needs:[...b.matchAll(/^-\s*\((\d+)\)\s*(.+)$/gm)].map(m=>`(${m[1]}) ${m[2].trim()}`),
       attendance:grab(/Attendance:\s*(\d+)/,b)});
   }
-  const map=new Map();
+  // Merge ONLY blocks that are the same meeting split across rooms (e.g. Vassar 140/142):
+  // same date+time, identical setup notes, and items identical or listed on just one block.
+  // Anything else stays a separate event — over-splitting is safe, merging away items is not.
+  const norm=s=>(s||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const sameList=(a,b)=>a.length===b.length&&a.every((x,i)=>norm(x)===norm(b[i]));
+  const events=[];
   for(const r of raw){
-    const key=r.date+'|'+r.start+'|'+r.end;
-    if(!map.has(key))map.set(key,{...r,locs:[r.loc],include:true});
-    else{const e=map.get(key);
-      if(!e.locs.includes(r.loc))e.locs.push(r.loc);
-      if(r.needs.length&&!e.needs.length)e.needs=r.needs;
-      if(r.notes&&!e.notes)e.notes=r.notes;}
+    const twin=events.find(e=>e.date===r.date&&e.start===r.start&&e.end===r.end
+      &&norm(e.notes)===norm(r.notes)
+      &&(!r.needs.length||!e.needs.length||sameList(e.needs,r.needs)));
+    if(twin){
+      if(!twin.locs.includes(r.loc))twin.locs.push(r.loc);
+      if(!twin.needs.length)twin.needs=r.needs;
+      twin.blockCount++;
+    }else events.push({...r,locs:[r.loc],include:true,blockCount:1});
   }
-  const events=[...map.values()];
+  // same-name events sharing a time slot get their venue in the title so they're distinguishable
+  for(const e of events)e.siblings=events.filter(x=>x.date===e.date&&x.start===e.start&&x.end===e.end).length;
   for(const e of events){
     const parts=e.locs.map(l=>{const m=l.match(/^(.*?)\s+(\S+)\s*-\s*(.+)$/);return m?{pre:m[1],num:m[2],bld:m[3]}:null;});
     e.locLabel=(parts.every(p=>p)&&parts.length>1&&new Set(parts.map(p=>p.pre+'|'+p.bld)).size===1)
@@ -461,7 +474,7 @@ function parseEmail(text){
   }
   events.sort((a,b)=>jsDate(a.date,a.start)-jsDate(b.date,b.start));
   applyTiming(events);
-  return{header,events};
+  return{header,events,blockTotal:raw.length,blockFound:(text.match(/Location:/gi)||[]).length};
 }
 
 /* ---------------- timing engine ---------------- */
@@ -484,19 +497,22 @@ function applyTiming(events){
     e.setupEnd=new Date(e.setupStart.getTime()+SETUP_MIN*60000);
     if(!e.hasTech)e.flags.push({t:'NO TECH ITEMS',warn:true});
   }
-  // stagger same-day overlaps (in setup-date order)
+  staggerBackward(events);
+}
+
+// Overlapping setup blocks on the same day are moved EARLIER (never later),
+// so every setup still finishes before its event begins.
+function staggerBackward(events){
   const byDay={};
   for(const e of events){(byDay[isoD(e.setupStart)]??=[]).push(e);}
   for(const day of Object.values(byDay)){
-    day.sort((a,b)=>a.setupStart-b.setupStart);
+    day.sort((a,b)=>b.setupStart-a.setupStart); // latest first; stable for ties
     for(let i=1;i<day.length;i++){
-      const prev=day[i-1],cur=day[i];
-      if(cur.setupStart<prev.setupEnd){
-        cur.setupStart=new Date(prev.setupEnd);
-        cur.setupEnd=new Date(cur.setupStart.getTime()+SETUP_MIN*60000);
-        cur.flags.push({t:'STAGGERED',warn:false});
-        const evStart=jsDate(cur.date,cur.start);
-        if(isoD(cur.setupStart)===isoD(evStart)&&cur.setupEnd>evStart)cur.flags.push({t:'CHECK OVERLAP',warn:true});
+      const later=day[i-1],cur=day[i];
+      if(cur.setupEnd>later.setupStart){
+        cur.setupEnd=new Date(later.setupStart);
+        cur.setupStart=new Date(cur.setupEnd.getTime()-SETUP_MIN*60000);
+        cur.flags.push({t:'STAGGERED EARLIER',warn:false});
       }
     }
   }
@@ -531,6 +547,9 @@ function render(){
   let html='';
   if(!anyTech)html+=`<div class="banner warn">No tech items found in this email — it may be catering/maintenance only. You can still force-include dates below if needed.</div>`;
   html+=`<div class="banner ok"><span>Title: <strong>[Tech Request] - ${parsed.header.event||'—'}</strong></span><span>${n} setup event${n!==1?'s':''} selected</span></div>`;
+  const merged=parsed.blockTotal-parsed.events.length;
+  html+=`<div class="hint" style="margin:-4px 0 12px;font-family:var(--mono);font-size:11.5px">AUDIT: ${parsed.blockFound} location block${parsed.blockFound!==1?'s':''} in email → ${parsed.events.length} calendar event${parsed.events.length!==1?'s':''}${merged>0?` (${merged} merged as split-room bookings of the same meeting)`:''}</div>`;
+  if(parsed.blockFound>parsed.blockTotal)html+=`<div class="banner warn">⚠ ${parsed.blockFound-parsed.blockTotal} location block${parsed.blockFound-parsed.blockTotal!==1?'s were':' was'} found but couldn’t be read (missing or unusual “Date &amp; Time” line). Check the email manually — those dates are NOT in this export.</div>`;
   parsed.events.forEach((e,i)=>{
     const evStart=jsDate(e.date,e.start);
     html+=`<div class="card${e.include?'':' off'}">
@@ -620,7 +639,9 @@ function composeEvent(e,title){
   const kept=e.items.filter(i=>i.keep);
   if(kept.length)desc.push('\nTech needed:\n'+kept.map(i=>'• '+i.text).join('\n'));
   if(e.notesInclude&&e.notes.trim())desc.push('\nSetup notes:\n'+e.notes.trim());
-  return{title:title||`[Tech Request] - ${parsed.header.event||'Event'}`,
+  const baseTitle=title||`[Tech Request] - ${parsed.header.event||'Event'}`;
+  const venue=(e.locs[0]||'').split(' - ')[0].trim();
+  return{title:e.siblings>1&&venue?`${baseTitle} — ${venue}`:baseTitle,
     locStr,attendees:attendeesFor(e),resources:selRooms.filter(r=>r.email),desc:desc.join('\n')};
 }
 
@@ -882,21 +903,7 @@ function dgApplyTiming(events){
     if(e.isWebinar&&!(startM>BUSINESS_END))e.flags.push({t:'WEBINAR',warn:false});
     e.setupEnd=new Date(e.setupStart.getTime()+SETUP_MIN*60000);
   }
-  const byDay={};
-  for(const e of events){(byDay[isoD(e.setupStart)]??=[]).push(e);}
-  for(const day of Object.values(byDay)){
-    day.sort((a,b)=>a.setupStart-b.setupStart);
-    for(let i=1;i<day.length;i++){
-      const prev=day[i-1],cur=day[i];
-      if(cur.setupStart<prev.setupEnd){
-        cur.setupStart=new Date(prev.setupEnd);
-        cur.setupEnd=new Date(cur.setupStart.getTime()+SETUP_MIN*60000);
-        cur.flags.push({t:'STAGGERED',warn:false});
-        if(cur.startM!=null){const evS=jsDate(cur.date,cur.startM);
-          if(isoD(cur.setupStart)===isoD(evS)&&cur.setupEnd>evS)cur.flags.push({t:'CHECK OVERLAP',warn:true});}
-      }
-    }
-  }
+  staggerBackward(events);
 }
 
 function dgRoomPicker(e,i){
